@@ -102,6 +102,13 @@ public class MigrateApiAction extends AbstractApiAction {
     @SuppressWarnings("unchecked")
     protected void migrate(final RestChannel channel, final Client client) throws IOException {
 
+        final Version oldestNodeVersion = clusterService.state().getNodes().getMinNodeVersion();
+
+        if (oldestNodeVersion.before(LegacyESVersion.V_7_0_0)) {
+            badRequest(channel, "Can not migrate configuration because cluster is not fully migrated.");
+            return;
+        }
+
         final SecurityDynamicConfiguration<?> loadedConfig = load(CType.CONFIG, true);
 
         if (loadedConfig.getVersion() != 1) {
