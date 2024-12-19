@@ -145,6 +145,8 @@ import org.opensearch.security.auditlog.impl.AuditLogImpl;
 import org.opensearch.security.auth.BackendRegistry;
 import org.opensearch.security.compliance.ComplianceIndexingOperationListener;
 import org.opensearch.security.compliance.ComplianceIndexingOperationListenerImpl;
+import org.opensearch.security.config.update.ConfigurationUpdateAction;
+import org.opensearch.security.config.update.TransportConfigurationUpdateAction;
 import org.opensearch.security.configuration.AdminDNs;
 import org.opensearch.security.configuration.ClusterInfoHolder;
 import org.opensearch.security.configuration.CompatConfig;
@@ -183,7 +185,6 @@ import org.opensearch.security.securityconf.DynamicConfigFactory;
 import org.opensearch.security.securityconf.impl.CType;
 import org.opensearch.security.setting.OpensearchDynamicSetting;
 import org.opensearch.security.setting.TransportPassiveAuthSetting;
-import org.opensearch.security.ssl.ExternalSecurityKeyStore;
 import org.opensearch.security.ssl.OpenSearchSecureSettingsFactory;
 import org.opensearch.security.ssl.OpenSearchSecuritySSLPlugin;
 import org.opensearch.security.ssl.SslExceptionHandler;
@@ -682,11 +683,14 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
         List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> actions = new ArrayList<>(1);
         if (!disabled && !SSLConfig.isSslOnlyMode()) {
-            actions.add(new ActionHandler<>(ConfigUpdateAction.INSTANCE, TransportConfigUpdateAction.class));
-            // external storage does not support reload and does not provide SSL certs info
-            if (!ExternalSecurityKeyStore.hasExternalSslContext(settings)) {
-                actions.add(new ActionHandler<>(CertificatesActionType.INSTANCE, TransportCertificatesInfoNodesAction.class));
+            final var useClusterState = useClusterStateToInitSecurityConfig(settings);
+            if (useClusterState) {
+                actions.add(new ActionHandler<>(ConfigurationUpdateAction.INSTANCE, TransportConfigurationUpdateAction.class));
+            } else {
+                actions.add(new ActionHandler<>(ConfigUpdateAction.INSTANCE, TransportConfigUpdateAction.class));
             }
+            // external storage does not support reload and does not provide SSL certs info
+            actions.add(new ActionHandler<>(CertificatesActionType.INSTANCE, TransportCertificatesInfoNodesAction.class));
             actions.add(new ActionHandler<>(WhoAmIAction.INSTANCE, TransportWhoAmIAction.class));
         }
         return actions;

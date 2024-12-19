@@ -29,7 +29,6 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestRequest.Method;
-import org.opensearch.security.configuration.Salt;
 import org.opensearch.security.dlic.rest.validation.EndpointValidator;
 import org.opensearch.security.dlic.rest.validation.RequestContentValidator;
 import org.opensearch.security.dlic.rest.validation.RequestContentValidator.DataType;
@@ -55,8 +54,6 @@ public class RolesApiAction extends AbstractApiAction {
     );
 
     public static class RoleRequestContentValidator extends RequestContentValidator {
-
-        private static final Salt SALT = new Salt(new byte[] { 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 6 });
 
         protected RoleRequestContentValidator(ValidationContext validationContext) {
             super(validationContext);
@@ -142,7 +139,7 @@ public class RolesApiAction extends AbstractApiAction {
             public ValidationResult<SecurityConfiguration> isAllowedToChangeImmutableEntity(SecurityConfiguration securityConfiguration)
                 throws IOException {
                 return EndpointValidator.super.isAllowedToChangeImmutableEntity(securityConfiguration).map(
-                    ignore -> isAllowedToChangeEntityWithRestAdminPermissions(securityConfiguration)
+                    this::isAllowedToChangeEntityWithRestAdminPermissions
                 );
             }
 
