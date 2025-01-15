@@ -120,8 +120,6 @@ public class OpenSearchSecuritySSLPlugin extends Plugin implements SystemIndexPl
     protected final Logger log = LogManager.getLogger(this.getClass());
     public static final String CLIENT_TYPE = "client.type";
     protected final boolean client;
-    protected final boolean httpSSLEnabled;
-    protected final boolean transportSSLEnabled;
     protected final boolean extendedKeyUsageEnabled;
     protected final Settings settings;
     protected volatile SecurityRestFilter securityRestHandler;
@@ -131,7 +129,7 @@ public class OpenSearchSecuritySSLPlugin extends Plugin implements SystemIndexPl
     protected final Path configPath;
     private final static SslExceptionHandler NOOP_SSL_EXCEPTION_HANDLER = new SslExceptionHandler() {
     };
-    protected final SSLConfig SSLConfig;
+    protected final SSLConfig sslConfig;
     protected volatile ThreadPool threadPool;
 
     @SuppressWarnings("removal")
@@ -141,12 +139,10 @@ public class OpenSearchSecuritySSLPlugin extends Plugin implements SystemIndexPl
             this.settings = null;
             this.sharedGroupFactory = null;
             this.client = false;
-            this.httpSSLEnabled = false;
-            this.transportSSLEnabled = false;
             this.extendedKeyUsageEnabled = false;
             this.sslSettingsManager = null;
             this.configPath = null;
-            SSLConfig = new SSLConfig(false, false);
+            sslConfig = SSLConfig.NO_SSL_CONFIG;
 
             AccessController.doPrivileged(new PrivilegedAction<Object>() {
                 @Override
@@ -158,7 +154,7 @@ public class OpenSearchSecuritySSLPlugin extends Plugin implements SystemIndexPl
 
             return;
         }
-        SSLConfig = new SSLConfig(settings);
+        sslConfig = new SSLConfig(settings);
         this.configPath = configPath;
 
         if (this.configPath != null) {
@@ -229,23 +225,10 @@ public class OpenSearchSecuritySSLPlugin extends Plugin implements SystemIndexPl
 
         client = !"node".equals(this.settings.get(OpenSearchSecuritySSLPlugin.CLIENT_TYPE));
 
-        httpSSLEnabled = settings.getAsBoolean(
-            SSLConfigConstants.SECURITY_SSL_HTTP_ENABLED,
-            SSLConfigConstants.SECURITY_SSL_HTTP_ENABLED_DEFAULT
-        );
-        transportSSLEnabled = settings.getAsBoolean(
-            SSLConfigConstants.SECURITY_SSL_TRANSPORT_ENABLED,
-            SSLConfigConstants.SECURITY_SSL_TRANSPORT_ENABLED_DEFAULT
-        );
         extendedKeyUsageEnabled = settings.getAsBoolean(
             SSLConfigConstants.SECURITY_SSL_TRANSPORT_EXTENDED_KEY_USAGE_ENABLED,
             SSLConfigConstants.SECURITY_SSL_TRANSPORT_EXTENDED_KEY_USAGE_ENABLED_DEFAULT
         );
-
-        if (!httpSSLEnabled && !transportSSLEnabled) {
-            log.error("SSL not activated for http and/or transport.");
-        }
-
         this.sslSettingsManager = new SslSettingsManager(new Environment(settings, configPath));
     }
 
@@ -264,7 +247,7 @@ public class OpenSearchSecuritySSLPlugin extends Plugin implements SystemIndexPl
         Tracer tracer
     ) {
 
-        if (!client && httpSSLEnabled) {
+        if (!client && sslConfig.httpSslEnabled()) {
 
             final ValidatingDispatcher validatingDispatcher = new ValidatingDispatcher(
                 threadPool.getThreadContext(),
@@ -317,8 +300,8 @@ public class OpenSearchSecuritySSLPlugin extends Plugin implements SystemIndexPl
     public List<TransportInterceptor> getTransportInterceptors(NamedWriteableRegistry namedWriteableRegistry, ThreadContext threadContext) {
         List<TransportInterceptor> interceptors = new ArrayList<TransportInterceptor>(1);
 
-        if (transportSSLEnabled && !client) {
-            interceptors.add(new SecuritySSLTransportInterceptor(settings, null, null, SSLConfig, NOOP_SSL_EXCEPTION_HANDLER));
+        if (sslConfig.transportSslEnabled() && !client) {
+            interceptors.add(new SecuritySSLTransportInterceptor(settings, null, null, sslConfig, NOOP_SSL_EXCEPTION_HANDLER));
         }
 
         return interceptors;
@@ -337,7 +320,7 @@ public class OpenSearchSecuritySSLPlugin extends Plugin implements SystemIndexPl
     ) {
 
         Map<String, Supplier<Transport>> transports = new HashMap<String, Supplier<Transport>>();
-        if (transportSSLEnabled) {
+        if (sslConfig.transportSslEnabled()) {
             transports.put(
                 "org.opensearch.security.ssl.http.netty.SecuritySSLNettyTransport",
                 () -> new SecureNetty4Transport(
@@ -658,7 +641,7 @@ public class OpenSearchSecuritySSLPlugin extends Plugin implements SystemIndexPl
     public Settings additionalSettings() {
         final Settings.Builder builder = Settings.builder();
 
-        if (!client && httpSSLEnabled) {
+        if (!client && sslConfig.httpSslEnabled()) {
 
             if (settings.get("http.compression") == null) {
                 builder.put("http.compression", false);
@@ -670,7 +653,7 @@ public class OpenSearchSecuritySSLPlugin extends Plugin implements SystemIndexPl
             builder.put(NetworkModule.HTTP_TYPE_KEY, "org.opensearch.security.ssl.http.netty.SecuritySSLNettyHttpServerTransport");
         }
 
-        if (transportSSLEnabled) {
+        if (sslConfig.transportSslEnabled()) {
             builder.put(NetworkModule.TRANSPORT_TYPE_KEY, "org.opensearch.security.ssl.http.netty.SecuritySSLNettyTransport");
         }
 
@@ -688,7 +671,7 @@ public class OpenSearchSecuritySSLPlugin extends Plugin implements SystemIndexPl
     @Override
     public Optional<SecureSettingsFactory> getSecureSettingFactory(Settings settings) {
         return Optional.of(
-            new OpenSearchSecureSettingsFactory(threadPool, sslSettingsManager, NOOP_SSL_EXCEPTION_HANDLER, securityRestHandler, SSLConfig)
+            new OpenSearchSecureSettingsFactory(threadPool, sslSettingsManager, NOOP_SSL_EXCEPTION_HANDLER, securityRestHandler, sslConfig)
         );
     }
 

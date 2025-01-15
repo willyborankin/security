@@ -110,7 +110,7 @@ public class SecuritySSLRequestHandler<T extends TransportRequest> implements Tr
         try {
             final SslHandler sslhandler = channel.get("ssl_server", SslHandler.class).orElse(null);
             if (sslhandler == null) {
-                if (SSLConfig.isDualModeEnabled()) {
+                if (SSLConfig.isDualModeEnabled() || SSLConfig.sslDisabled()) {
                     log.info("Communication in dual mode. Skipping SSL handler check");
                     threadContext.putTransient(ConfigConstants.SECURITY_SSL_DUAL_MODE_SKIP_SECURITY, Boolean.TRUE);
                     messageReceivedDecorate(request, actualHandler, channel, task);

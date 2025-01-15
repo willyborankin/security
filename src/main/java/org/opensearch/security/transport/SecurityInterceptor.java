@@ -87,7 +87,7 @@ public class SecurityInterceptor {
     private final Settings settings;
     private final SslExceptionHandler sslExceptionHandler;
     private final ClusterInfoHolder clusterInfoHolder;
-    private final SSLConfig SSLConfig;
+    private final SSLConfig sslConfig;
     private final Supplier<Boolean> actionTraceEnabled;
 
     public SecurityInterceptor(
@@ -112,7 +112,7 @@ public class SecurityInterceptor {
         this.settings = settings;
         this.sslExceptionHandler = sslExceptionHandler;
         this.clusterInfoHolder = clusterInfoHolder;
-        this.SSLConfig = SSLConfig;
+        this.sslConfig = SSLConfig;
         this.actionTraceEnabled = actionTraceSupplier;
     }
 
@@ -125,7 +125,7 @@ public class SecurityInterceptor {
             principalExtractor,
             requestEvalProvider,
             cs,
-            SSLConfig,
+            sslConfig,
             sslExceptionHandler
         );
     }

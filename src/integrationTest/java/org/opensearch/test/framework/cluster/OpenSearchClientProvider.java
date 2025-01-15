@@ -190,6 +190,10 @@ public interface OpenSearchClientProvider {
         return createGenericClientRestClient(new TestRestClientConfiguration().username(user).password(password).headers(headers));
     }
 
+    default TestRestClient getHttpRestClient(String user, String password) {
+        return new TestRestClient(getHttpAddress(), List.of(getBasicAuthHeader(user, password)), null);
+    }
+
     default TestRestClient getRestClient(String user, String password, CertificateData useCertificateData, Header... headers) {
         Header basicAuthHeader = getBasicAuthHeader(user, password);
         if (headers != null && headers.length > 0) {

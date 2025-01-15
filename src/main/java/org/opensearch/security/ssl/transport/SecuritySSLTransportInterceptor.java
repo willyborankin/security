@@ -29,11 +29,11 @@ import org.opensearch.transport.TransportRequestHandler;
 
 public final class SecuritySSLTransportInterceptor implements TransportInterceptor {
 
-    protected final Logger log = LogManager.getLogger(this.getClass());
-    protected final ThreadPool threadPool;
-    protected final PrincipalExtractor principalExtractor;
-    protected final SslExceptionHandler errorHandler;
-    protected final SSLConfig SSLConfig;
+    private final Logger log = LogManager.getLogger(this.getClass());
+    private final ThreadPool threadPool;
+    private final PrincipalExtractor principalExtractor;
+    private final SslExceptionHandler errorHandler;
+    private final SSLConfig SSLConfig;
 
     public SecuritySSLTransportInterceptor(
         final Settings settings,

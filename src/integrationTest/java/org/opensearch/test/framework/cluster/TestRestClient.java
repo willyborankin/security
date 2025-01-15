@@ -99,11 +99,16 @@ public class TestRestClient implements AutoCloseable {
 
     private final InetAddress sourceInetAddress;
 
+    public TestRestClient(InetSocketAddress nodeHttpAddress, List<Header> headers, InetAddress sourceInetAddress) {
+        this(nodeHttpAddress, headers, null, sourceInetAddress);
+    }
+
     public TestRestClient(InetSocketAddress nodeHttpAddress, List<Header> headers, SSLContext sslContext, InetAddress sourceInetAddress) {
         this.nodeHttpAddress = nodeHttpAddress;
         this.headers.addAll(headers);
         this.sslContext = sslContext;
         this.sourceInetAddress = sourceInetAddress;
+        this.enableHTTPClientSSL = sslContext != null;
     }
 
     public HttpResponse get(String path, Header... headers) {
