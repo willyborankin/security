@@ -153,7 +153,7 @@ public interface EndpointValidator {
         return ValidationResult.success(rolesConfiguration);
     }
 
-    default ValidationResult<SecurityConfiguration> isAllowedToChangeEntityWithRestAdminPermissions(
+    default ValidationResult<SecurityConfiguration> isisAllowedToChangeEntityWithRestAdminPermissions(
         final SecurityConfiguration securityConfiguration
     ) throws IOException {
         final var configuration = securityConfiguration.configuration();
