@@ -18,10 +18,10 @@ import java.security.KeyStoreException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.net.ssl.KeyManagerFactory;
 import javax.security.auth.x500.X500Principal;
 
@@ -39,18 +39,16 @@ public interface KeyStoreConfiguration {
     default KeyManagerFactory createKeyManagerFactory(boolean validateCertificates) {
         final var keyStore = createKeyStore();
         if (validateCertificates) {
-            KeyStoreUtils.validateKeyStoreCertificates(keyStore.v1());
+            KeyStoreUtils.validateKeyStoreCertificates(keyStore.v1(), CertificateValidator.DEFAULT_VALIDATOR);
         }
         return buildKeyManagerFactory(keyStore.v1(), keyStore.v2());
     }
 
     default Set<X500Principal> getIssuerDns() {
-        Set<X500Principal> issuerDns = new HashSet<>();
-        final List<Certificate> certificates = loadCertificates();
-        for (Certificate certificate : certificates) {
-            issuerDns.add(certificate.x509Certificate().getIssuerX500Principal());
-        }
-        return issuerDns;
+        return loadCertificates().stream()
+            .map(Certificate::x509Certificate)
+            .map(X509Certificate::getIssuerX500Principal)
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     default KeyManagerFactory buildKeyManagerFactory(final KeyStore keyStore, final char[] password) {

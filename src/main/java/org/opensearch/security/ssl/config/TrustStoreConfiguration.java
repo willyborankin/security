@@ -26,10 +26,14 @@ import javax.net.ssl.TrustManagerFactory;
 import javax.security.auth.x500.X500Principal;
 
 import com.google.common.collect.ImmutableList;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import org.opensearch.OpenSearchException;
 
 public interface TrustStoreConfiguration {
+
+    Logger LOGGER = LogManager.getLogger(TrustStoreConfiguration.class);
 
     TrustStoreConfiguration EMPTY_CONFIGURATION = new TrustStoreConfiguration() {
         @Override
@@ -60,7 +64,13 @@ public interface TrustStoreConfiguration {
     default TrustManagerFactory createTrustManagerFactory(boolean validateCertificates, Set<X500Principal> issuerDns) {
         final var trustStore = createTrustStore();
         if (validateCertificates) {
-            KeyStoreUtils.validateKeyStoreCertificates(trustStore, issuerDns);
+            KeyStoreUtils.validateKeyStoreCertificates(trustStore, certificate -> {
+                if (issuerDns != null && issuerDns.contains(certificate.getIssuerX500Principal())) {
+                    CertificateValidator.DEFAULT_VALIDATOR.validate(certificate);
+                } else {
+                    LOGGER.info("Skipping validation for {}", certificate.getSubjectX500Principal().getName());
+                }
+            });
         }
         return buildTrustManagerFactory(trustStore);
     }

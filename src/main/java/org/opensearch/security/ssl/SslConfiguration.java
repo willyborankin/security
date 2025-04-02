@@ -25,9 +25,6 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
 import javax.security.auth.x500.X500Principal;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import org.opensearch.OpenSearchException;
 import org.opensearch.security.ssl.config.Certificate;
 import org.opensearch.security.ssl.config.KeyStoreConfiguration;
@@ -42,8 +39,6 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 public class SslConfiguration {
-
-    private final static Logger LOGGER = LogManager.getLogger(SslConfiguration.class);
 
     private final SslParameters sslParameters;
 
@@ -90,8 +85,8 @@ public class SslConfiguration {
     SslContext buildServerSslContext(final boolean validateCertificates) {
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<SslContext>) () -> {
-                KeyManagerFactory kmFactory = keyStoreConfiguration.createKeyManagerFactory(validateCertificates);
-                Set<X500Principal> issuerDns = keyStoreConfiguration.getIssuerDns();
+                final KeyManagerFactory kmFactory = keyStoreConfiguration.createKeyManagerFactory(validateCertificates);
+                final Set<X500Principal> issuerDns = keyStoreConfiguration.getIssuerDns();
                 return SslContextBuilder.forServer(kmFactory)
                     .sslProvider(sslParameters.provider())
                     .clientAuth(sslParameters.clientAuth())
@@ -129,8 +124,8 @@ public class SslConfiguration {
     SslContext buildClientSslContext(final boolean validateCertificates) {
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<SslContext>) () -> {
-                KeyManagerFactory kmFactory = keyStoreConfiguration.createKeyManagerFactory(validateCertificates);
-                Set<X500Principal> issuerDns = keyStoreConfiguration.getIssuerDns();
+                final KeyManagerFactory kmFactory = keyStoreConfiguration.createKeyManagerFactory(validateCertificates);
+                final Set<X500Principal> issuerDns = keyStoreConfiguration.getIssuerDns();
                 return SslContextBuilder.forClient()
                     .sslProvider(sslParameters.provider())
                     .protocols(sslParameters.allowedProtocols())

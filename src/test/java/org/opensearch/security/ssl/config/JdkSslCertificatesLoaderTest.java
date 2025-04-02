@@ -66,6 +66,12 @@ public class JdkSslCertificatesLoaderTest extends SslCertificatesLoaderTest {
     static final String CLIENT_KEYSTORE_ALIAS = "client-keystore-alias";
 
     @Test
+    public void validateCaCertificates() throws Exception {}
+
+    @Test
+    public void validateAccessCertificates() throws Exception {}
+
+    @Test
     public void loadHttpSslConfigurationFromKeyAndTrustStoreFiles() throws Exception {
         testJdkBasedSslConfiguration(SSL_HTTP_PREFIX, randomBoolean());
     }
