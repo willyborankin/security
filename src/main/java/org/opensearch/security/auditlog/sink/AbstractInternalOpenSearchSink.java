@@ -56,7 +56,6 @@ public abstract class AbstractInternalOpenSearchSink extends AuditLogSink {
 
     @Override
     public void close() throws IOException {
-
     }
 
     protected abstract boolean createIndexIfAbsent(String indexName);
