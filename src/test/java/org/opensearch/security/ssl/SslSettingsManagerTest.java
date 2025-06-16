@@ -12,15 +12,18 @@
 package org.opensearch.security.ssl;
 
 import java.nio.file.Path;
+import java.security.Security;
 import java.util.List;
 import java.util.Locale;
 
 import com.carrotsearch.randomizedtesting.RandomizedTest;
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.common.settings.MockSecureSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.env.Environment;
@@ -29,8 +32,12 @@ import org.opensearch.security.ssl.config.CertType;
 
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContext;
+import org.opensearch.security.ssl.util.SSLConfigConstants;
+import org.opensearch.security.support.ConfigConstants;
+import org.opensearch.security.test.helper.file.FileHelper;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.opensearch.security.ssl.CertificatesUtils.privateKeyToPemObject;
 import static org.opensearch.security.ssl.CertificatesUtils.writePemContent;
 import static org.opensearch.security.ssl.util.SSLConfigConstants.SECURITY_SSL_HTTP_CLIENTAUTH_MODE;
@@ -83,6 +90,91 @@ public class SslSettingsManagerTest extends RandomizedTest {
     static Path path(final String fileName) {
         return certificatesRule.configRootFolder().resolve(fileName);
     }
+k
+
+//    @Test
+//    public void testCipherAndProtocols() throws Exception {
+//
+//        Security.setProperty("jdk.tls.disabledAlgorithms", "");
+//
+//        Settings settings = Settings.builder()
+//                .put(SSLConfigConstants.SECURITY_SSL_TRANSPORT_ENABLED, false)
+//                .put(ConfigConstants.SECURITY_SSL_ONLY, true)
+//                .put(SSLConfigConstants.SECURITY_SSL_HTTP_KEYSTORE_ALIAS, "node-0")
+//                .put(SSLConfigConstants.SECURITY_SSL_HTTP_ENABLED, true)
+//                .put(SSLConfigConstants.SECURITY_SSL_HTTP_CLIENTAUTH_MODE, "REQUIRE")
+//                .put(
+//                        SSLConfigConstants.SECURITY_SSL_HTTP_KEYSTORE_FILEPATH,
+//                        FileHelper.getAbsoluteFilePathFromClassPath("ssl/node-0-keystore.jks")
+//                )
+//                .put(
+//                        SSLConfigConstants.SECURITY_SSL_HTTP_TRUSTSTORE_FILEPATH,
+//                        FileHelper.getAbsoluteFilePathFromClassPath("ssl/truststore.jks")
+//                )
+//                // WEAK and insecure cipher, do NOT use this, its here for unittesting only!!!
+//                .put(SSLConfigConstants.SECURITY_SSL_HTTP_ENABLED_CIPHERS, "SSL_RSA_EXPORT_WITH_RC4_40_MD5")
+//                // WEAK and insecure protocol, do NOT use this, its here for unittesting only!!!
+//                .put(SSLConfigConstants.SECURITY_SSL_HTTP_ENABLED_PROTOCOLS, "SSLv3")
+//                .put("client.type", "node")
+//                .put("path.home", ".")
+//                .build();
+//
+//        try {
+//            var sslSettingsManager = new SslSettingsManager(TestEnvironment.newEnvironment(settings));
+//            String[] enabledCiphers = sslSettingsManager.sslConfiguration(CertType.HTTP).map(c -> c.sslParameters().allowedCiphers()).orElseThrow().toArray(new String[0]);
+//            String[] enabledProtocols = sslSettingsManager.sslConfiguration(CertType.HTTP).map(c -> c.sslParameters().allowedProtocols()).orElseThrow().toArray(new String[0]);
+//
+//            assertThat(enabledProtocols.length, is(1));
+//            assertThat(enabledProtocols[0], is("SSLv3"));
+//            assertThat(enabledCiphers.length, is(1));
+//            assertThat(enabledCiphers[0], is("SSL_RSA_EXPORT_WITH_RC4_40_MD5"));
+//
+//            settings = Settings.builder()
+//                    .put(SSLConfigConstants.SECURITY_SSL_TRANSPORT_ENABLED, true)
+//                    .put(ConfigConstants.SECURITY_SSL_ONLY, true)
+//                    .put(
+//                            SSLConfigConstants.SECURITY_SSL_TRANSPORT_KEYSTORE_FILEPATH,
+//                            FileHelper.getAbsoluteFilePathFromClassPath("ssl/node-0-keystore.jks")
+//                    )
+//                    .put(
+//                            SSLConfigConstants.SECURITY_SSL_TRANSPORT_TRUSTSTORE_FILEPATH,
+//                            FileHelper.getAbsoluteFilePathFromClassPath("ssl/truststore.jks")
+//                    )
+//                    // WEAK and insecure cipher, do NOT use this, its here for unittesting only!!!
+//                    .put(SSLConfigConstants.SECURITY_SSL_TRANSPORT_ENABLED_CIPHERS, "SSL_RSA_EXPORT_WITH_RC4_40_MD5")
+//                    // WEAK and insecure protocol, do NOT use this, its here for unittesting only!!!
+//                    .put(SSLConfigConstants.SECURITY_SSL_TRANSPORT_ENABLED_PROTOCOLS, "SSLv3")
+//                    .put("client.type", "node")
+//                    .put("path.home", ".")
+//                    .build();
+//
+//            sslSettingsManager = new SslSettingsManager(TestEnvironment.newEnvironment(settings));
+//            enabledCiphers = sslSettingsManager.sslConfiguration(CertType.TRANSPORT).map(c-> c.sslParameters().allowedCiphers()).orElseThrow().toArray(new String[0]);
+//            enabledProtocols = sslSettingsManager.sslConfiguration(CertType.TRANSPORT).map(c->c.sslParameters().allowedProtocols()).orElseThrow().toArray(new String[0]);
+//
+//            assertThat(enabledProtocols.length, is(1));
+//            assertThat(enabledProtocols[0], is("SSLv3"));
+//            assertThat(enabledCiphers.length, is(1));
+//            assertThat(enabledCiphers[0], is("SSL_RSA_EXPORT_WITH_RC4_40_MD5"));
+//
+//            enabledCiphers = sslSettingsManager.sslConfiguration(CertType.TRANSPORT_CLIENT).map(c->c.sslParameters().allowedCiphers()).orElseThrow().toArray(new String[0]);
+//            enabledProtocols = sslSettingsManager.sslConfiguration(CertType.TRANSPORT_CLIENT).map(c->c.sslParameters().allowedProtocols()).orElseThrow().toArray(new String[0]);
+//
+//            assertThat(enabledProtocols.length, is(1));
+//            assertThat(enabledProtocols[0], is("SSLv3"));
+//            assertThat(enabledCiphers.length, is(1));
+//            assertThat(enabledCiphers[0], is("SSL_RSA_EXPORT_WITH_RC4_40_MD5"));
+//        } catch (OpenSearchSecurityException e) {
+//            Assert.assertTrue(
+//                    "Check if error contains 'no valid cipher suites' -> " + e.toString(),
+//                    e.toString().contains("no valid cipher suites")
+//                            || e.toString().contains("failed to set cipher suite")
+//                            || e.toString().contains("Unable to configure permitted SSL ciphers")
+//                            || e.toString().contains("OPENSSL_internal:NO_CIPHER_MATCH")
+//            );
+//        }
+//    }
+
 
     @Test
     public void failsIfNoSslSet() throws Exception {
