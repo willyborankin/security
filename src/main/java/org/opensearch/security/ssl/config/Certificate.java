@@ -140,7 +140,7 @@ public class Certificate {
         }
     }
 
-    static Method getObjectMethod() throws ClassNotFoundException, NoSuchMethodException {
+    public static Method getObjectMethod() throws ClassNotFoundException, NoSuchMethodException {
         Class<?> asn1TaggedObjectClass = Class.forName("org.bouncycastle.asn1.ASN1TaggedObject");
         try {
             return asn1TaggedObjectClass.getMethod("getBaseObject");

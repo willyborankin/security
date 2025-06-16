@@ -48,9 +48,14 @@ import org.opensearch.common.settings.MockSecureSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.env.Environment;
+import org.opensearch.env.TestEnvironment;
 import org.opensearch.node.Node;
 import org.opensearch.node.PluginAwareNode;
 import org.opensearch.security.OpenSearchSecurityPlugin;
+import org.opensearch.security.ssl.config.CertType;
+import org.opensearch.security.ssl.config.Certificate;
+import org.opensearch.security.ssl.config.SslCertificatesLoader;
 import org.opensearch.security.ssl.util.ExceptionUtils;
 import org.opensearch.security.ssl.util.SSLConfigConstants;
 import org.opensearch.security.support.ConfigConstants;
@@ -195,90 +200,6 @@ public class SSLTest extends SingleClusterTest {
         Assert.assertTrue(res.contains(clusterInfo.clustername));
         Assert.assertFalse(res.contains("\"opendistro_security\""));
         Assert.assertFalse(res.contains("keystore_filepath"));
-    }
-
-    @Test
-    public void testCipherAndProtocols() throws Exception {
-
-        Security.setProperty("jdk.tls.disabledAlgorithms", "");
-
-        Settings settings = Settings.builder()
-            .put(SSLConfigConstants.SECURITY_SSL_TRANSPORT_ENABLED, false)
-            .put(ConfigConstants.SECURITY_SSL_ONLY, true)
-            .put(SSLConfigConstants.SECURITY_SSL_HTTP_KEYSTORE_ALIAS, "node-0")
-            .put(SSLConfigConstants.SECURITY_SSL_HTTP_ENABLED, true)
-            .put(SSLConfigConstants.SECURITY_SSL_HTTP_CLIENTAUTH_MODE, "REQUIRE")
-            .put(
-                SSLConfigConstants.SECURITY_SSL_HTTP_KEYSTORE_FILEPATH,
-                FileHelper.getAbsoluteFilePathFromClassPath("ssl/node-0-keystore.jks")
-            )
-            .put(
-                SSLConfigConstants.SECURITY_SSL_HTTP_TRUSTSTORE_FILEPATH,
-                FileHelper.getAbsoluteFilePathFromClassPath("ssl/truststore.jks")
-            )
-            // WEAK and insecure cipher, do NOT use this, its here for unittesting only!!!
-            .put(SSLConfigConstants.SECURITY_SSL_HTTP_ENABLED_CIPHERS, "SSL_RSA_EXPORT_WITH_RC4_40_MD5")
-            // WEAK and insecure protocol, do NOT use this, its here for unittesting only!!!
-            .put(SSLConfigConstants.SECURITY_SSL_HTTP_ENABLED_PROTOCOLS, "SSLv3")
-            .put("client.type", "node")
-            .put("path.home", ".")
-            .build();
-
-        try {
-            String[] enabledCiphers = new DefaultSecurityKeyStore(settings, Paths.get(".")).createHTTPSSLEngine().getEnabledCipherSuites();
-            String[] enabledProtocols = new DefaultSecurityKeyStore(settings, Paths.get(".")).createHTTPSSLEngine().getEnabledProtocols();
-
-            assertThat(enabledProtocols.length, is(1));
-            assertThat(enabledProtocols[0], is("SSLv3"));
-            assertThat(enabledCiphers.length, is(1));
-            assertThat(enabledCiphers[0], is("SSL_RSA_EXPORT_WITH_RC4_40_MD5"));
-
-            settings = Settings.builder()
-                .put(SSLConfigConstants.SECURITY_SSL_TRANSPORT_ENABLED, true)
-                .put(ConfigConstants.SECURITY_SSL_ONLY, true)
-                .put(
-                    SSLConfigConstants.SECURITY_SSL_TRANSPORT_KEYSTORE_FILEPATH,
-                    FileHelper.getAbsoluteFilePathFromClassPath("ssl/node-0-keystore.jks")
-                )
-                .put(
-                    SSLConfigConstants.SECURITY_SSL_TRANSPORT_TRUSTSTORE_FILEPATH,
-                    FileHelper.getAbsoluteFilePathFromClassPath("ssl/truststore.jks")
-                )
-                // WEAK and insecure cipher, do NOT use this, its here for unittesting only!!!
-                .put(SSLConfigConstants.SECURITY_SSL_TRANSPORT_ENABLED_CIPHERS, "SSL_RSA_EXPORT_WITH_RC4_40_MD5")
-                // WEAK and insecure protocol, do NOT use this, its here for unittesting only!!!
-                .put(SSLConfigConstants.SECURITY_SSL_TRANSPORT_ENABLED_PROTOCOLS, "SSLv3")
-                .put("client.type", "node")
-                .put("path.home", ".")
-                .build();
-
-            enabledCiphers = new DefaultSecurityKeyStore(settings, Paths.get(".")).createServerTransportSSLEngine()
-                .getEnabledCipherSuites();
-            enabledProtocols = new DefaultSecurityKeyStore(settings, Paths.get(".")).createServerTransportSSLEngine().getEnabledProtocols();
-
-            assertThat(enabledProtocols.length, is(1));
-            assertThat(enabledProtocols[0], is("SSLv3"));
-            assertThat(enabledCiphers.length, is(1));
-            assertThat(enabledCiphers[0], is("SSL_RSA_EXPORT_WITH_RC4_40_MD5"));
-
-            enabledCiphers = new DefaultSecurityKeyStore(settings, Paths.get(".")).createClientTransportSSLEngine(null, -1)
-                .getEnabledCipherSuites();
-            enabledProtocols = new DefaultSecurityKeyStore(settings, Paths.get(".")).createClientTransportSSLEngine(null, -1)
-                .getEnabledProtocols();
-
-            assertThat(enabledProtocols.length, is(1));
-            assertThat(enabledProtocols[0], is("SSLv3"));
-            assertThat(enabledCiphers.length, is(1));
-            assertThat(enabledCiphers[0], is("SSL_RSA_EXPORT_WITH_RC4_40_MD5"));
-        } catch (OpenSearchSecurityException e) {
-            Assert.assertTrue(
-                "Check if error contains 'no valid cipher suites' -> " + e.toString(),
-                e.toString().contains("no valid cipher suites")
-                    || e.toString().contains("failed to set cipher suite")
-                    || e.toString().contains("Unable to configure permitted SSL ciphers")
-                    || e.toString().contains("OPENSSL_internal:NO_CIPHER_MATCH")
-            );
-        }
     }
 
     @Test
@@ -1293,7 +1214,7 @@ public class SSLTest extends SingleClusterTest {
     @Test
     public void testGetObjectMethod() {
         try {
-            Method method = DefaultSecurityKeyStore.getObjectMethod();
+            Method method = Certificate.getObjectMethod();
             Assert.assertNotNull("Method should not be null", method);
             Assert.assertTrue(
                 "One of the expected methods should be available",
