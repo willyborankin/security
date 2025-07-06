@@ -90,7 +90,6 @@ public class SslSettingsManagerTest extends RandomizedTest {
     static Path path(final String fileName) {
         return certificatesRule.configRootFolder().resolve(fileName);
     }
-k
 
 //    @Test
 //    public void testCipherAndProtocols() throws Exception {
