@@ -270,7 +270,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
     private volatile PrivilegesEvaluator evaluator;
     private volatile UserService userService;
     private volatile RestLayerPrivilegesEvaluator restLayerEvaluator;
-    private volatile ConfigurationRepository cr;
+    private volatile ConfigurationRepository configurationRepository;
     private volatile AdminDNs adminDns;
     private volatile ClusterService cs;
     private volatile AtomicReference<DiscoveryNode> localNode = new AtomicReference<>();
@@ -638,7 +638,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
                         Objects.requireNonNull(threadPool),
                         Objects.requireNonNull(cs),
                         Objects.requireNonNull(adminDns),
-                        Objects.requireNonNull(cr)
+                        Objects.requireNonNull(configurationRepository)
                     )
                 );
                 handlers.add(
@@ -669,7 +669,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
                         restController,
                         localClient,
                         adminDns,
-                        cr,
+                        configurationRepository,
                         cs,
                         principalExtractor,
                         evaluator,
@@ -870,7 +870,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
                 }
             }.toListener());
 
-            indexModule.addIndexEventListener(cr);
+            indexModule.addIndexEventListener(configurationRepository);
         }
     }
 
@@ -1133,11 +1133,18 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
 
         adminDns = new AdminDNs(settings);
 
-        cr = ConfigurationRepository.create(settings, this.configPath, threadPool, localClient, clusterService, auditLog);
+        configurationRepository = ConfigurationRepository.create(
+            settings,
+            this.configPath,
+            threadPool,
+            localClient,
+            clusterService,
+            auditLog
+        );
 
         this.passwordHasher = PasswordHasherFactory.createPasswordHasher(settings);
 
-        userService = new UserService(cs, cr, passwordHasher, settings, localClient);
+        userService = new UserService(cs, configurationRepository, passwordHasher, settings, localClient);
 
         final XFFResolver xffResolver = new XFFResolver(threadPool);
         backendRegistry = new BackendRegistry(settings, adminDns, xffResolver, auditLog, threadPool, cih);
@@ -1151,7 +1158,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
             clusterService::state,
             threadPool,
             threadPool.getThreadContext(),
-            cr,
+            configurationRepository,
             resolver,
             auditLog,
             settings,
@@ -1174,7 +1181,9 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
                 threadPool,
                 dlsFlsBaseContext
             );
-            cr.subscribeOnChange(configMap -> { ((DlsFlsValveImpl) dlsFlsValve).updateConfiguration(cr.getConfiguration(CType.ROLES)); });
+            configurationRepository.subscribeOnChange(configMap -> {
+                ((DlsFlsValveImpl) dlsFlsValve).updateConfiguration(configurationRepository.getConfiguration(CType.ROLES));
+            });
         }
 
         sf = new SecurityFilter(settings, evaluator, adminDns, dlsFlsValve, auditLog, threadPool, cs, cih, compatConfig, irr, xffResolver);
@@ -1199,7 +1208,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
             configPath,
             compatConfig
         );
-        dcf = new DynamicConfigFactory(cr, settings, configPath, localClient, threadPool, cih, passwordHasher);
+        dcf = new DynamicConfigFactory(configurationRepository, settings, configPath, localClient, threadPool, cih, passwordHasher);
         dcf.registerDCFListener(backendRegistry);
         dcf.registerDCFListener(compatConfig);
         dcf.registerDCFListener(irr);
@@ -1212,7 +1221,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
             dcf.registerDCFListener(auditLog);
         }
 
-        cr.setDynamicConfigFactory(dcf);
+        configurationRepository.setDynamicConfigFactory(dcf);
 
         si = new SecurityInterceptor(
             settings,
@@ -1241,7 +1250,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
         }
 
         components.add(adminDns);
-        components.add(cr);
+        components.add(configurationRepository);
         components.add(xffResolver);
         components.add(backendRegistry);
         components.add(evaluator);
@@ -1288,7 +1297,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
         final var allowDefaultInit = settings.getAsBoolean(SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, false);
         final var useClusterState = useClusterStateToInitSecurityConfig(settings);
         if (!SSLConfig.isSslOnlyMode() && !isDisabled(settings) && allowDefaultInit && useClusterState) {
-            clusterService.addListener(cr);
+            clusterService.addListener(configurationRepository);
         }
         return components;
     }
@@ -2243,7 +2252,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
     public void onNodeStarted(DiscoveryNode localNode) {
         this.localNode.set(localNode);
         if (!SSLConfig.isSslOnlyMode() && !client && !disabled && !useClusterStateToInitSecurityConfig(settings)) {
-            cr.initOnNodeStart();
+            configurationRepository.initOnNodeStart();
         }
 
         // resourceSharingIndexManagementRepository will be null when sec plugin is disabled or is in SSLOnly mode, hence it will not be
