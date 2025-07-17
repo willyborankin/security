@@ -44,7 +44,6 @@ import org.opensearch.action.admin.cluster.shards.ClusterSearchShardsResponse;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.search.SearchAction;
 import org.opensearch.action.search.SearchRequest;
-import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -88,6 +87,7 @@ public class SecurityInterceptor {
     private final SSLConfig SSLConfig;
     private final Supplier<Boolean> actionTraceEnabled;
     private final UserFactory userFactory;
+    private final String localNodeId;
 
     public SecurityInterceptor(
         final Settings settings,
@@ -101,7 +101,8 @@ public class SecurityInterceptor {
         final ClusterInfoHolder clusterInfoHolder,
         final SSLConfig SSLConfig,
         final Supplier<Boolean> actionTraceSupplier,
-        final UserFactory userFactory
+        final UserFactory userFactory,
+        final String localNodeId
     ) {
         this.backendRegistry = backendRegistry;
         this.auditLog = auditLog;
@@ -115,6 +116,7 @@ public class SecurityInterceptor {
         this.SSLConfig = SSLConfig;
         this.actionTraceEnabled = actionTraceSupplier;
         this.userFactory = userFactory;
+        this.localNodeId = localNodeId;
     }
 
     public <T extends TransportRequest> SecurityRequestHandler<T> getHandler(String action, TransportRequestHandler<T> actualHandler) {
@@ -138,8 +140,7 @@ public class SecurityInterceptor {
         String action,
         TransportRequest request,
         TransportRequestOptions options,
-        TransportResponseHandler<T> handler,
-        DiscoveryNode localNode
+        TransportResponseHandler<T> handler
     ) {
         final Map<String, String> origHeaders0 = getThreadContext().getHeaders();
         final User user0 = getThreadContext().getTransient(ConfigConstants.OPENDISTRO_SECURITY_USER);
@@ -157,7 +158,7 @@ public class SecurityInterceptor {
 
         final boolean isDebugEnabled = log.isDebugEnabled();
 
-        final boolean isSameNodeRequest = localNode != null && localNode.equals(connection.getNode());
+        final boolean isSameNodeRequest = localNodeId != null && localNodeId.equals(connection.getNode().getId());
 
         try (ThreadContext.StoredContext stashedContext = getThreadContext().stashContext()) {
             final TransportResponseHandler<T> restoringHandler = new RestoringTransportResponseHandler<T>(handler, stashedContext);

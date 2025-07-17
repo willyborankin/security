@@ -138,20 +138,6 @@ public class SecurityInterceptorTests {
             .put("request.headers.default", "1")
             .build();
         threadPool = new ThreadPool(settings);
-        securityInterceptor = new SecurityInterceptor(
-            settings,
-            threadPool,
-            backendRegistry,
-            auditLog,
-            principalExtractor,
-            requestEvalProvider,
-            clusterService,
-            sslExceptionHandler,
-            clusterInfoHolder,
-            sslConfig,
-            () -> true,
-            new UserFactory.Simple()
-        );
 
         clusterName = ClusterName.DEFAULT;
         when(clusterService.getClusterName()).thenReturn(clusterName);
@@ -243,6 +229,22 @@ public class SecurityInterceptorTests {
         };
 
         threadPool.getThreadContext().putTransient(ConfigConstants.OPENDISTRO_SECURITY_USER, user);
+
+        securityInterceptor = new SecurityInterceptor(
+            settings,
+            threadPool,
+            backendRegistry,
+            auditLog,
+            principalExtractor,
+            requestEvalProvider,
+            clusterService,
+            sslExceptionHandler,
+            clusterInfoHolder,
+            sslConfig,
+            () -> true,
+            new UserFactory.Simple(),
+            "local-node1"
+        );
     }
 
     /**
@@ -263,10 +265,9 @@ public class SecurityInterceptorTests {
         String action,
         TransportRequest request,
         TransportRequestOptions options,
-        TransportResponseHandler handler,
-        DiscoveryNode localNode
+        TransportResponseHandler handler
     ) {
-        securityInterceptor.sendRequestDecorate(sender, connection, action, request, options, handler, localNode);
+        securityInterceptor.sendRequestDecorate(sender, connection, action, request, options, handler);
         verifyOriginalContext(user);
         try {
             senderLatch.get().await(1, TimeUnit.SECONDS);
@@ -285,10 +286,9 @@ public class SecurityInterceptorTests {
         String action,
         TransportRequest request,
         TransportRequestOptions options,
-        TransportResponseHandler handler,
-        DiscoveryNode localNode
+        TransportResponseHandler handler
     ) {
-        securityInterceptor.sendRequestDecorate(sender, connection, action, request, options, handler, localNode);
+        securityInterceptor.sendRequestDecorate(sender, connection, action, request, options, handler);
         try {
             senderLatch.get().await(1, TimeUnit.SECONDS);
         } catch (final InterruptedException e) {
@@ -301,41 +301,31 @@ public class SecurityInterceptorTests {
 
     @Test
     public void testSendRequestDecorateLocalConnection() {
-
         // local node request
-        completableRequestDecorate(sender, connection1, action, request, options, handler, localNode);
-        // this is also a local request
-        completableRequestDecorate(sender, connection2, action, request, options, handler, otherNode);
+        completableRequestDecorate(sender, connection1, action, request, options, handler);
+        // this is also a local request but from diff node in this case userf must be deserialized
+        completableRequestDecorate(jdkSerializedSender, connection2, action, request, options, handler);
     }
 
     @Test
     public void testSendRequestDecorateRemoteConnection() {
-
         // this is a remote request
-        completableRequestDecorate(jdkSerializedSender, connection3, action, request, options, handler, localNode);
+        completableRequestDecorate(jdkSerializedSender, connection3, action, request, options, handler);
         // this is a remote request where the transport address is different
-        completableRequestDecorate(jdkSerializedSender, connection4, action, request, options, handler, localNode);
+        completableRequestDecorate(jdkSerializedSender, connection4, action, request, options, handler);
     }
 
     @Test
     public void testSendRequestDecorateRemoteConnectionUsesJDKSerialization() {
         threadPool.getThreadContext().putHeader(ConfigConstants.OPENDISTRO_SECURITY_USER_HEADER, Base64Helper.serializeObject(user));
-        completableRequestDecorateWithPreviouslyPopulatedHeaders(
-            jdkSerializedSender,
-            connection3,
-            action,
-            request,
-            options,
-            handler,
-            localNode
-        );
+        completableRequestDecorateWithPreviouslyPopulatedHeaders(jdkSerializedSender, connection3, action, request, options, handler);
     }
 
     @Test
     public void testSendNoOriginNodeCausesSerialization() {
 
         // this is a request where the local node is null; have to use the remote connection since the serialization will fail
-        completableRequestDecorate(jdkSerializedSender, connection3, action, request, options, handler, null);
+        completableRequestDecorate(jdkSerializedSender, connection3, action, request, options, handler);
     }
 
     @Test
@@ -344,7 +334,7 @@ public class SecurityInterceptorTests {
         // The completable version swallows the NPE so have to call actual method
         assertThrows(
             java.lang.NullPointerException.class,
-            () -> securityInterceptor.sendRequestDecorate(jdkSerializedSender, null, action, request, options, handler, localNode)
+            () -> securityInterceptor.sendRequestDecorate(jdkSerializedSender, null, action, request, options, handler)
         );
     }
 
@@ -354,7 +344,7 @@ public class SecurityInterceptorTests {
         // Make the origin null should cause the ensureCorrectHeaders method to populate with Origin.LOCAL.toString()
         threadPool.getThreadContext().putHeader(ConfigConstants.OPENDISTRO_SECURITY_ORIGIN, null);
         // This is a different way to get the same result which exercises the origin0 = null logic of ensureCorrectHeaders
-        securityInterceptor.sendRequestDecorate(sender, connection1, action, request, options, handler, localNode);
+        securityInterceptor.sendRequestDecorate(sender, connection1, action, request, options, handler);
         verifyOriginalContext(user);
     }
 
@@ -365,7 +355,7 @@ public class SecurityInterceptorTests {
         // logic to occur
         threadPool.getThreadContext().putHeader(ConfigConstants.OPENDISTRO_SECURITY_REMOTE_ADDRESS, null);
         // This is a different way to get the same result which exercises the origin0 = null logic of ensureCorrectHeaders
-        completableRequestDecorate(sender, connection1, action, request, options, handler, localNode);
+        completableRequestDecorate(sender, connection1, action, request, options, handler);
     }
 
     @Test
@@ -376,7 +366,7 @@ public class SecurityInterceptorTests {
                 ConfigConstants.OPENDISTRO_SECURITY_REMOTE_ADDRESS,
                 String.valueOf(new TransportAddress(new InetSocketAddress("8.8.8.8", 80)))
             );
-        completableRequestDecorate(jdkSerializedSender, connection3, action, request, options, handler, localNode);
+        completableRequestDecorate(jdkSerializedSender, connection3, action, request, options, handler);
     }
 
     @Test
@@ -385,7 +375,7 @@ public class SecurityInterceptorTests {
         threadPool.getThreadContext().putTransient("_opendistro_security_trace", "fake trace value");
         // this case is just for action trace logic validation
         // local node request
-        completableRequestDecorate(sender, connection1, action, request, options, handler, localNode);
+        completableRequestDecorate(sender, connection1, action, request, options, handler);
         // even though we add the trace the restoring handler should remove it from the thread context
         assertFalse(
             threadPool.getThreadContext().getHeaders().keySet().stream().anyMatch(header -> header.startsWith("_opendistro_security_trace"))
@@ -397,9 +387,9 @@ public class SecurityInterceptorTests {
 
         threadPool.getThreadContext().putHeader("FAKE_HEADER", "fake_value");
         // this is a local request
-        completableRequestDecorate(sender, connection1, action, request, options, handler, localNode);
+        completableRequestDecorate(sender, connection1, action, request, options, handler);
         // this is a remote request
-        completableRequestDecorate(jdkSerializedSender, connection3, action, request, options, handler, localNode);
+        completableRequestDecorate(jdkSerializedSender, connection3, action, request, options, handler);
     }
 
     @Test
@@ -409,9 +399,9 @@ public class SecurityInterceptorTests {
         threadPool.getThreadContext().putHeader(null, null);
         threadPool.getThreadContext().putHeader(null, "null");
         // this is a local request
-        completableRequestDecorate(sender, connection1, action, request, options, handler, localNode);
+        completableRequestDecorate(sender, connection1, action, request, options, handler);
         // this is a remote request
-        completableRequestDecorate(jdkSerializedSender, connection3, action, request, options, handler, localNode);
+        completableRequestDecorate(jdkSerializedSender, connection3, action, request, options, handler);
     }
 
     @Test
@@ -437,6 +427,6 @@ public class SecurityInterceptorTests {
             .putHeader(ConfigConstants.OPENDISTRO_SECURITY_INJECTED_ROLES_VALIDATION, "fake injected roles validation string");
 
         // this is a local request
-        completableRequestDecorate(sender, connection1, action, request, options, handler, localNode);
+        completableRequestDecorate(sender, connection1, action, request, options, handler);
     }
 }

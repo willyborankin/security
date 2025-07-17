@@ -273,7 +273,6 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
     private volatile ConfigurationRepository configurationRepository;
     private volatile AdminDNs adminDns;
     private volatile ClusterService cs;
-    private volatile AtomicReference<DiscoveryNode> localNode = new AtomicReference<>();
     private volatile AuditLog auditLog;
     private volatile BackendRegistry backendRegistry;
     private volatile SslExceptionHandler sslExceptionHandler;
@@ -910,7 +909,6 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
 
                 @Override
                 public AsyncSender interceptSender(AsyncSender sender) {
-
                     return new AsyncSender() {
 
                         @Override
@@ -921,7 +919,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
                             TransportRequestOptions options,
                             TransportResponseHandler<T> handler
                         ) {
-                            si.sendRequestDecorate(sender, connection, action, request, options, handler, localNode.get());
+                            si.sendRequestDecorate(sender, connection, action, request, options, handler);
                         }
                     };
                 }
@@ -1235,7 +1233,8 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
             Objects.requireNonNull(cih),
             SSLConfig,
             OpenSearchSecurityPlugin::isActionTraceEnabled,
-            userFactory
+            userFactory,
+            nodeEnvironment.nodeId()
         );
         components.add(principalExtractor);
 
@@ -2250,7 +2249,6 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
 
     @Override
     public void onNodeStarted(DiscoveryNode localNode) {
-        this.localNode.set(localNode);
         if (!SSLConfig.isSslOnlyMode() && !client && !disabled && !useClusterStateToInitSecurityConfig(settings)) {
             configurationRepository.initOnNodeStart();
         }
