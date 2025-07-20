@@ -39,10 +39,10 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.opensearch.security.configuration.ConfigurationRepository.DEFAULT_CONFIG_VERSION;
 import static org.opensearch.security.support.ConfigConstants.OPENDISTRO_SECURITY_DEFAULT_CONFIG_INDEX;
-import static org.opensearch.security.support.ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX;
 import static org.opensearch.security.support.ConfigConstants.SECURITY_BACKGROUND_INIT_IF_SECURITYINDEX_NOT_EXIST;
 import static org.opensearch.security.support.ConfigConstants.SECURITY_RESTAPI_ROLES_ENABLED;
 import static org.opensearch.security.support.ConfigConstants.SECURITY_UNSUPPORTED_DELAY_INITIALIZATION_SECONDS;
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX;
 import static org.opensearch.test.framework.TestSecurityConfig.Role.ALL_ACCESS;
 
 @RunWith(com.carrotsearch.randomizedtesting.RandomizedRunner.class)
@@ -76,7 +76,7 @@ public class SecurityConfigurationBootstrapTests {
     @Test
     public void testInitializeWithSecurityAdminWhenNoBackgroundInitialization() throws Exception {
         final var nodeSettings = ImmutableMap.<String, Object>builder()
-            .put(SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, false)
+            .put(ALLOW_DEFAULT_INIT_SECURITY_INDEX.getKey(), false)
             .put(SECURITY_BACKGROUND_INIT_IF_SECURITYINDEX_NOT_EXIST, false)
             .build();
         try (final LocalCluster cluster = createCluster(nodeSettings)) {
@@ -101,7 +101,7 @@ public class SecurityConfigurationBootstrapTests {
     @Test
     public void shouldStillLoadSecurityConfigDuringBootstrapAndActiveConfigUpdateRequests() throws Exception {
         final var nodeSettings = ImmutableMap.<String, Object>builder()
-            .put(SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, true)
+            .put(ALLOW_DEFAULT_INIT_SECURITY_INDEX.getKey(), true)
             .put(SECURITY_UNSUPPORTED_DELAY_INITIALIZATION_SECONDS, 5)
             .build();
         try (final LocalCluster cluster = createCluster(nodeSettings)) {

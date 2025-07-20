@@ -81,8 +81,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.opensearch.security.support.ConfigConstants.OPENDISTRO_SECURITY_DEFAULT_CONFIG_INDEX;
-import static org.opensearch.security.support.ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX;
-import static org.opensearch.security.support.ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_USE_CLUSTER_STATE;
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -217,7 +216,7 @@ public class ConfigurationRepositoryTest {
 
     @Test
     public void initOnNodeStart_withSecurityIndexCreationEnabledShouldSetInstallDefaultConfigTrue() {
-        Settings settings = Settings.builder().put(SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, true).build();
+        Settings settings = Settings.builder().put(ALLOW_DEFAULT_INIT_SECURITY_INDEX.getKey(), true).build();
 
         ConfigurationRepository configRepository = createConfigurationRepository(settings);
 
@@ -227,7 +226,7 @@ public class ConfigurationRepositoryTest {
 
     @Test
     public void initOnNodeStart_whenClusterAvailable() {
-        Settings settings = Settings.builder().put(SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, true).build();
+        Settings settings = Settings.builder().put(ALLOW_DEFAULT_INIT_SECURITY_INDEX.getKey(), true).build();
         ConfigurationRepository configRepository = createConfigurationRepository(settings);
         when(clusterBlocks.hasGlobalBlockWithStatus(RestStatus.SERVICE_UNAVAILABLE)).thenReturn(false);
 
@@ -238,7 +237,7 @@ public class ConfigurationRepositoryTest {
 
     @Test
     public void initOnNodeStart_whenClusterInitiallyUnavailable() {
-        Settings settings = Settings.builder().put(SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, true).build();
+        Settings settings = Settings.builder().put(ALLOW_DEFAULT_INIT_SECURITY_INDEX.getKey(), true).build();
         ConfigurationRepository configRepository = createConfigurationRepository(settings);
         when(clusterBlocks.hasGlobalBlockWithStatus(RestStatus.SERVICE_UNAVAILABLE)).thenReturn(true, true, false);
 
@@ -256,7 +255,7 @@ public class ConfigurationRepositoryTest {
             setupObjectMapperInjectables();
 
             Settings settings = Settings.builder()
-                .put(SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, true)
+                .put(ALLOW_DEFAULT_INIT_SECURITY_INDEX.getKey(), true)
                 .put("path.home", TEST_CONFIG_DIR)
                 .put(ConfigConstants.SECURITY_UNSUPPORTED_DELAY_INITIALIZATION_SECONDS, 1)
                 .build();
@@ -524,7 +523,7 @@ public class ConfigurationRepositoryTest {
 
     @Test
     public void isAuditHotReloadingEnabled_shouldReturnFalseIfNotSet() {
-        Settings settings = Settings.builder().put(SECURITY_ALLOW_DEFAULT_INIT_USE_CLUSTER_STATE, true).build();
+        Settings settings = Settings.builder().put(ALLOW_DEFAULT_INIT_SECURITY_INDEX.getKey(), true).build();
         ConfigurationRepository configurationRepository = createConfigurationRepository(settings);
 
         boolean result = configurationRepository.isAuditHotReloadingEnabled();

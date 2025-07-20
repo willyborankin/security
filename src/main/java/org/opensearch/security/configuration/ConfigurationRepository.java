@@ -96,7 +96,8 @@ import org.opensearch.security.support.SecurityUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
-import static org.opensearch.security.support.ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_USE_CLUSTER_STATE;
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX;
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE;
 import static org.opensearch.security.support.SnapshotRestoreHelper.isSecurityIndexRestoredFromSnapshot;
 
 public class ConfigurationRepository implements ClusterStateListener, IndexEventListener {
@@ -431,7 +432,7 @@ public class ConfigurationRepository implements ClusterStateListener, IndexEvent
 
     @Deprecated
     public CompletableFuture<Boolean> initOnNodeStart() {
-        final boolean installDefaultConfig = settings.getAsBoolean(ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, false);
+        final boolean installDefaultConfig = ALLOW_DEFAULT_INIT_SECURITY_INDEX.get(settings);
 
         final Supplier<CompletableFuture<Boolean>> startInitialization = () -> {
             new Thread(() -> {
@@ -467,7 +468,7 @@ public class ConfigurationRepository implements ClusterStateListener, IndexEvent
     }
 
     public boolean isAuditHotReloadingEnabled() {
-        if (settings.getAsBoolean(SECURITY_ALLOW_DEFAULT_INIT_USE_CLUSTER_STATE, false)) {
+        if (ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE.get(settings)) {
             return auditHotReloadingEnabled.get();
         } else {
             return cl.isAuditConfigDocPresentInIndex();

@@ -281,10 +281,6 @@ public class ConfigConstants {
 
     public static final String SECURITY_CACHE_TTL_MINUTES = SECURITY_SETTINGS_PREFIX + "cache.ttl_minutes";
     public static final String SECURITY_ALLOW_UNSAFE_DEMOCERTIFICATES = SECURITY_SETTINGS_PREFIX + "allow_unsafe_democertificates";
-    public static final String SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX = SECURITY_SETTINGS_PREFIX + "allow_default_init_securityindex";
-
-    public static final String SECURITY_ALLOW_DEFAULT_INIT_USE_CLUSTER_STATE = SECURITY_SETTINGS_PREFIX
-        + "allow_default_init_securityindex.use_cluster_state";
 
     public static final String SECURITY_BACKGROUND_INIT_IF_SECURITYINDEX_NOT_EXIST = SECURITY_SETTINGS_PREFIX
         + "background_init_if_securityindex_not_exist";

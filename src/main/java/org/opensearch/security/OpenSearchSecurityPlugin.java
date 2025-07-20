@@ -237,11 +237,12 @@ import static org.opensearch.security.privileges.dlsfls.FieldMasking.Config.BLAK
 import static org.opensearch.security.resources.ResourceSharingIndexHandler.getSharingIndex;
 import static org.opensearch.security.setting.DeprecatedSettings.checkForDeprecatedSetting;
 import static org.opensearch.security.support.ConfigConstants.OPENDISTRO_SECURITY_AUTHENTICATED_USER;
-import static org.opensearch.security.support.ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX;
-import static org.opensearch.security.support.ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_USE_CLUSTER_STATE;
 import static org.opensearch.security.support.ConfigConstants.SECURITY_SSL_CERTIFICATES_HOT_RELOAD_ENABLED;
 import static org.opensearch.security.support.ConfigConstants.SECURITY_SSL_CERT_RELOAD_ENABLED;
 import static org.opensearch.security.support.ConfigConstants.SECURITY_UNSUPPORTED_RESTAPI_ALLOW_SECURITYCONFIG_MODIFICATION;
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX;
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE;
+import static org.opensearch.security.support.SecuritySettings.SECURITY_CONFIGURATION_INDEX_NAME;
 
 // CS-ENFORCE-SINGLE
 
@@ -323,10 +324,6 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
 
     private static boolean isDisabled(final Settings settings) {
         return settings.getAsBoolean(ConfigConstants.SECURITY_DISABLED, false);
-    }
-
-    private static boolean useClusterStateToInitSecurityConfig(final Settings settings) {
-        return settings.getAsBoolean(SECURITY_ALLOW_DEFAULT_INIT_USE_CLUSTER_STATE, false);
     }
 
     /**
@@ -1293,8 +1290,8 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
             sslSettingsManager.addSslConfigurationsChangeListener(resourceWatcherService);
         }
 
-        final var allowDefaultInit = settings.getAsBoolean(SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, false);
-        final var useClusterState = useClusterStateToInitSecurityConfig(settings);
+        final var allowDefaultInit = ALLOW_DEFAULT_INIT_SECURITY_INDEX.get(settings);
+        final var useClusterState = ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE.get(settings);
         if (!SSLConfig.isSslOnlyMode() && !isDisabled(settings) && allowDefaultInit && useClusterState) {
             clusterService.addListener(configurationRepository);
         }
@@ -1503,7 +1500,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
                 )
             ); // not filtered here
 
-            settings.add(Setting.simpleString(ConfigConstants.SECURITY_CONFIG_INDEX_NAME, Property.NodeScope, Property.Filtered));
+            settings.add(SECURITY_CONFIGURATION_INDEX_NAME);
             settings.add(Setting.groupSetting(ConfigConstants.SECURITY_AUTHCZ_IMPERSONATION_DN + ".", Property.NodeScope)); // not filtered
                                                                                                                             // here
 
@@ -1552,8 +1549,8 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
             settings.add(
                 Setting.boolSetting(ConfigConstants.SECURITY_ALLOW_UNSAFE_DEMOCERTIFICATES, false, Property.NodeScope, Property.Filtered)
             );
-            settings.add(Setting.boolSetting(SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, false, Property.NodeScope, Property.Filtered));
-            settings.add(Setting.boolSetting(SECURITY_ALLOW_DEFAULT_INIT_USE_CLUSTER_STATE, false, Property.NodeScope, Property.Filtered));
+            settings.add(ALLOW_DEFAULT_INIT_SECURITY_INDEX);
+            settings.add(ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE);
             settings.add(
                 Setting.boolSetting(
                     ConfigConstants.SECURITY_BACKGROUND_INIT_IF_SECURITYINDEX_NOT_EXIST,
@@ -2249,7 +2246,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
 
     @Override
     public void onNodeStarted(DiscoveryNode localNode) {
-        if (!SSLConfig.isSslOnlyMode() && !client && !disabled && !useClusterStateToInitSecurityConfig(settings)) {
+        if (!SSLConfig.isSslOnlyMode() && !client && !disabled && !ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE.get(settings)) {
             configurationRepository.initOnNodeStart();
         }
 

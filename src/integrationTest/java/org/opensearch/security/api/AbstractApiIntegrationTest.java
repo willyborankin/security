@@ -61,8 +61,8 @@ import static org.opensearch.security.dlic.rest.api.RestApiAdminPrivilegesEvalua
 import static org.opensearch.security.dlic.rest.api.RestApiAdminPrivilegesEvaluator.ENDPOINTS_WITH_PERMISSIONS;
 import static org.opensearch.security.dlic.rest.api.RestApiAdminPrivilegesEvaluator.RELOAD_CERTS_ACTION;
 import static org.opensearch.security.dlic.rest.api.RestApiAdminPrivilegesEvaluator.SECURITY_CONFIG_UPDATE;
-import static org.opensearch.security.support.ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX;
-import static org.opensearch.security.support.ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_USE_CLUSTER_STATE;
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX;
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE;
 import static org.opensearch.test.framework.TestSecurityConfig.REST_ADMIN_REST_API_ACCESS;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
@@ -117,9 +117,9 @@ public abstract class AbstractApiIntegrationTest extends RandomizedTest {
 
     protected Map<String, Object> getClusterSettings() {
         Map<String, Object> clusterSettings = new HashMap<>();
-        clusterSettings.put(SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, true);
+        clusterSettings.put(ALLOW_DEFAULT_INIT_SECURITY_INDEX.getKey(), true);
         clusterSettings.put(PLUGINS_SECURITY_RESTAPI_ROLES_ENABLED, List.of("user_admin__all_access", REST_ADMIN_REST_API_ACCESS));
-        clusterSettings.put(SECURITY_ALLOW_DEFAULT_INIT_USE_CLUSTER_STATE, randomBoolean());
+        clusterSettings.put(ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE.getKey(), randomBoolean());
         return clusterSettings;
     }
 

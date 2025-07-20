@@ -52,7 +52,6 @@ import org.opensearch.security.action.configupdate.ConfigUpdateAction;
 import org.opensearch.security.action.configupdate.ConfigUpdateRequest;
 import org.opensearch.security.action.configupdate.ConfigUpdateResponse;
 import org.opensearch.security.ssl.util.SSLConfigConstants;
-import org.opensearch.security.support.ConfigConstants;
 import org.opensearch.security.test.DynamicSecurityConfig;
 import org.opensearch.security.test.SingleClusterTest;
 import org.opensearch.security.test.helper.cluster.ClusterHelper;
@@ -63,6 +62,7 @@ import org.opensearch.transport.client.Client;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX;
 
 public class InitializationIntegrationTests extends SingleClusterTest {
 
@@ -281,7 +281,7 @@ public class InitializationIntegrationTests extends SingleClusterTest {
 
     @Test
     public void testDefaultConfig() throws Exception {
-        final Settings settings = Settings.builder().put(ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, true).build();
+        final Settings settings = Settings.builder().put(ALLOW_DEFAULT_INIT_SECURITY_INDEX.getKey(), true).build();
         setup(Settings.EMPTY, null, settings, false);
         RestHelper rh = nonSslRestHelper();
         Thread.sleep(10000);
@@ -297,7 +297,7 @@ public class InitializationIntegrationTests extends SingleClusterTest {
             final String defaultInitDirectory = ClusterHelper.updateDefaultDirectory(
                 new File(TEST_RESOURCE_RELATIVE_PATH + "invalid_config").getAbsolutePath()
             );
-            final Settings settings = Settings.builder().put(ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, true).build();
+            final Settings settings = Settings.builder().put(ALLOW_DEFAULT_INIT_SECURITY_INDEX.getKey(), true).build();
             setup(Settings.EMPTY, null, settings, false);
             RestHelper rh = nonSslRestHelper();
             Thread.sleep(10000);

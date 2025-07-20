@@ -14,6 +14,14 @@ package org.opensearch.security.support;
 import org.opensearch.common.settings.Setting;
 
 public class SecuritySettings {
+
+    public static final Setting<String> SECURITY_CONFIGURATION_INDEX_NAME = Setting.simpleString(
+        ConfigConstants.SECURITY_CONFIG_INDEX_NAME,
+        ConfigConstants.OPENDISTRO_SECURITY_DEFAULT_CONFIG_INDEX,
+        Setting.Property.NodeScope,
+        Setting.Property.Filtered
+    );
+
     public static final Setting<Boolean> LEGACY_OPENDISTRO_SSL_DUAL_MODE_SETTING = Setting.boolSetting(
         ConfigConstants.LEGACY_OPENDISTRO_SECURITY_CONFIG_SSL_DUAL_MODE_ENABLED,
         false,
@@ -35,5 +43,19 @@ public class SecuritySettings {
         Setting.Property.NodeScope,
         Setting.Property.Dynamic
     ); // Not filtered
+
+    public static final Setting<Boolean> ALLOW_DEFAULT_INIT_SECURITY_INDEX = Setting.boolSetting(
+        "plugins.security.allow_default_init_securityindex",
+        false,
+        Setting.Property.NodeScope,
+        Setting.Property.Filtered
+    );
+
+    public static final Setting<Boolean> ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE = Setting.boolSetting(
+        "plugins.security.allow_default_init_securityindex.use_cluster_state",
+        false,
+        Setting.Property.NodeScope,
+        Setting.Property.Filtered
+    );
 
 }

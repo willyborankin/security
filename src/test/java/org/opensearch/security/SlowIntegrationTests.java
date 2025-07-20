@@ -54,6 +54,7 @@ import org.opensearch.transport.Netty4ModulePlugin;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX;
 import static org.junit.Assert.assertThrows;
 
 public class SlowIntegrationTests extends SingleClusterTest {
@@ -234,7 +235,7 @@ public class SlowIntegrationTests extends SingleClusterTest {
     @Test
     public void testDelayInSecurityIndexInitialization() throws Exception {
         final Settings settings = Settings.builder()
-            .put(ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, true)
+            .put(ALLOW_DEFAULT_INIT_SECURITY_INDEX.getKey(), true)
             .put("cluster.routing.allocation.exclude._ip", "127.0.0.1")
             .build();
         assertThrows(IOException.class, () -> {

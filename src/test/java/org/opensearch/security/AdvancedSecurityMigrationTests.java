@@ -29,6 +29,7 @@ import org.opensearch.security.test.helper.rest.RestHelper;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX;
 
 public class AdvancedSecurityMigrationTests extends SingleClusterTest {
 
@@ -284,7 +285,7 @@ public class AdvancedSecurityMigrationTests extends SingleClusterTest {
 
     private Settings.Builder getAdvSecSettings() {
         return Settings.builder()
-            .put(ConfigConstants.SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX, true)
+            .put(ALLOW_DEFAULT_INIT_SECURITY_INDEX.getKey(), true)
             .put(ConfigConstants.SECURITY_UNSUPPORTED_PASSIVE_INTERTRANSPORT_AUTH_INITIALLY, true)
             .put(ConfigConstants.SECURITY_UNSUPPORTED_RESTAPI_ALLOW_SECURITYCONFIG_MODIFICATION, true)
             .put("node.attr.custom_node", true);
