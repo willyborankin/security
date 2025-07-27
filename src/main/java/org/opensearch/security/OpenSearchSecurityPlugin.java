@@ -78,7 +78,6 @@ import org.opensearch.action.support.ActionFilter;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.NamedDiff;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
-import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
@@ -153,6 +152,7 @@ import org.opensearch.security.configuration.CompatConfig;
 import org.opensearch.security.configuration.ConfigurationRepository;
 import org.opensearch.security.configuration.DlsFlsRequestValve;
 import org.opensearch.security.configuration.DlsFlsValveImpl;
+import org.opensearch.security.configuration.IndexManagement;
 import org.opensearch.security.configuration.PrivilegesInterceptorImpl;
 import org.opensearch.security.configuration.SecurityFlsDlsIndexSearcherWrapper;
 import org.opensearch.security.dlic.rest.api.Endpoint;
@@ -205,7 +205,6 @@ import org.opensearch.security.state.SecurityMetadata;
 import org.opensearch.security.support.ConfigConstants;
 import org.opensearch.security.support.GuardedSearchOperationWrapper;
 import org.opensearch.security.support.HeaderHelper;
-import org.opensearch.security.support.ModuleInfo;
 import org.opensearch.security.support.ReflectionHelper;
 import org.opensearch.security.support.SecuritySettings;
 import org.opensearch.security.transport.DefaultInterClusterRequestEvaluator;
@@ -1128,9 +1127,15 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
 
         adminDns = new AdminDNs(settings);
 
+        final var indexManagement = new IndexManagement(localClient);
+
+        indexManagement.addIndexStateListener(SECURITY_CONFIGURATION_INDEX_NAME.get(settings), indexState -> {});
+
         configurationRepository = ConfigurationRepository.create(
             settings,
-            this.configPath,
+            Optional.ofNullable(System.getProperty("security.default_init.dir"))
+                .map(Path::of)
+                .orElseGet(() -> new Environment(settings, configPath).configDir().resolve("opensearch-security/")),
             threadPool,
             localClient,
             clusterService,
@@ -1270,6 +1275,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
             resourcePluginInfo.getResourceSharingExtensions().forEach(extension -> {
                 extension.assignResourceSharingClient(resourceAccessControlClient);
             });
+            resourcePluginInfo.getResourceIndices().forEach(index -> indexManagement.addIndexStateListener(index, indexState -> {}));
             // CS-ENFORCE-SINGLE
             components.add(resourcePluginInfo);
             components.add(resourceAccessHandler);
@@ -1290,9 +1296,7 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
             sslSettingsManager.addSslConfigurationsChangeListener(resourceWatcherService);
         }
 
-        final var allowDefaultInit = ALLOW_DEFAULT_INIT_SECURITY_INDEX.get(settings);
-        final var useClusterState = ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE.get(settings);
-        if (!SSLConfig.isSslOnlyMode() && !isDisabled(settings) && allowDefaultInit && useClusterState) {
+        if (!SSLConfig.isSslOnlyMode() && !isDisabled(settings)) {
             clusterService.addListener(configurationRepository);
         }
         return components;
@@ -2242,34 +2246,6 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
         settingsFilter.add("opendistro_security.*");
         settingsFilter.add("plugins.security.*");
         return settingsFilter;
-    }
-
-    @Override
-    public void onNodeStarted(DiscoveryNode localNode) {
-        if (!SSLConfig.isSslOnlyMode() && !client && !disabled && !ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE.get(settings)) {
-            configurationRepository.initOnNodeStart();
-        }
-
-        // resourceSharingIndexManagementRepository will be null when sec plugin is disabled or is in SSLOnly mode, hence it will not be
-        // instantiated
-        if (settings != null
-            && settings.getAsBoolean(
-                FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED,
-                FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT
-            )) {
-            // create resource sharing index if absent
-            // TODO check if this should be wrapped in an atomic completable future
-            log.debug("Attempting to create Resource Sharing index");
-            Set<String> resourceIndices = new HashSet<>();
-            if (resourcePluginInfo != null) {
-                resourceIndices = resourcePluginInfo.getResourceIndices();
-            }
-            rsIndexHandler.createResourceSharingIndicesIfAbsent(resourceIndices);
-
-        }
-
-        final Set<ModuleInfo> securityModules = ReflectionHelper.getModulesLoaded();
-        log.info("{} OpenSearch Security modules loaded so far: {}", securityModules.size(), securityModules);
     }
 
     // below is a hack because it seems not possible to access RepositoriesService from a non guice class

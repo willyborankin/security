@@ -13,7 +13,6 @@ package org.opensearch.security.dlic.rest.api;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
@@ -277,7 +276,7 @@ public class ConfigUpgradeApiAction extends AbstractApiAction {
     @SuppressWarnings("removal")
     JsonNode loadConfigFileAsJson(final CType<?> cType) throws IOException {
         final var cd = securityApiDependencies.configurationRepository().getConfigDirectory();
-        final var filepath = cType.configFile(Path.of(cd)).toString();
+        final var filepath = cType.configFile(cd).toString();
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<JsonNode>) () -> {
                 final var loadedConfiguration = loadYamlFile(filepath, cType);

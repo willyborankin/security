@@ -23,8 +23,6 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.StepListener;
-import org.opensearch.action.admin.indices.create.CreateIndexRequest;
-import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
@@ -82,51 +80,6 @@ public class ResourceSharingIndexHandler {
     public ResourceSharingIndexHandler(final Client client, final ThreadPool threadPool) {
         this.client = client;
         this.threadPool = threadPool;
-    }
-
-    public final static Map<String, Object> INDEX_SETTINGS = Map.of(
-        "index.number_of_shards",
-        1,
-        "index.auto_expand_replicas",
-        "0-all",
-        "index.hidden",
-        "true"
-    );
-
-    /**
-     * Creates the resource sharing index if it doesn't already exist.
-     * This method initializes the index with predefined mappings and settings
-     * for storing resource sharing information.
-     * The index will be created with the following structure:
-     * - source_idx (keyword): The source index containing the original document
-     * - resource_id (keyword): The ID of the shared resource
-     * - created_by (object): Information about the user who created the sharing
-     * - user (keyword): Username of the creator
-     * - share_with (object): Access control configuration for shared resources
-     * - [action-group] (object): Name of the action-group
-     * - users (array): List of users with access
-     * - roles (array): List of roles with access
-     * - backend_roles (array): List of backend roles with access
-     *
-     * @throws RuntimeException if there are issues reading/writing index settings
-     *                          or communicating with the cluster
-     */
-
-    public void createResourceSharingIndicesIfAbsent(Set<String> resourceIndices) {
-        // TODO: Once stashContext is replaced with switchContext this call will have to be modified
-        try (ThreadContext.StoredContext ctx = this.threadPool.getThreadContext().stashContext()) {
-            for (String resourceIndex : resourceIndices) {
-                String resourceSharingIndex = getSharingIndex(resourceIndex);
-                CreateIndexRequest cir = new CreateIndexRequest(resourceSharingIndex).settings(INDEX_SETTINGS).waitForActiveShards(1);
-                ActionListener<CreateIndexResponse> cirListener = ActionListener.wrap(response -> {
-                    LOGGER.info("Resource sharing index {} created.", resourceSharingIndex);
-                }, (failResponse) -> {
-                    /* Index already exists, ignore and continue */
-                    LOGGER.info("Index {} already exists.", resourceSharingIndex);
-                });
-                this.client.admin().indices().create(cir, cirListener);
-            }
-        }
     }
 
     public static String getSharingIndex(String resourceIndex) {

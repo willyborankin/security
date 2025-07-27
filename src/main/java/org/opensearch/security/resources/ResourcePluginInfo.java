@@ -39,6 +39,7 @@ public class ResourcePluginInfo {
     public Set<String> getResourceIndices() {
         return resourceSharingExtensions.stream()
             .flatMap(ext -> ext.getResourceProviders().stream().map(ResourceProvider::resourceIndexName))
+            .map(ResourceSharingIndexHandler::getSharingIndex)
             .collect(Collectors.toSet());
     }
 }

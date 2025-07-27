@@ -77,4 +77,5 @@ public class SecurityApiDependencies {
     public String securityIndexName() {
         return settings().get(ConfigConstants.SECURITY_CONFIG_INDEX_NAME, ConfigConstants.OPENDISTRO_SECURITY_DEFAULT_CONFIG_INDEX);
     }
+
 }

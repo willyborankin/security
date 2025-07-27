@@ -33,6 +33,7 @@ import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.get.MultiGetRequest;
 import org.opensearch.action.get.MultiGetResponse;
 import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.support.ActiveShardCount;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -49,6 +50,7 @@ import org.opensearch.transport.client.Client;
 
 import static org.opensearch.core.xcontent.DeprecationHandler.THROW_UNSUPPORTED_OPERATION;
 import static org.opensearch.security.configuration.ConfigurationRepository.DEFAULT_CONFIG_VERSION;
+import static org.opensearch.security.support.SecuritySettings.SECURITY_CONFIGURATION_INDEX_NAME;
 import static org.opensearch.security.support.YamlConfigReader.emptyJsonConfigFor;
 import static org.opensearch.security.support.YamlConfigReader.yamlContentFor;
 
@@ -58,26 +60,29 @@ public class SecurityIndexHandler {
 
     private static final Logger LOGGER = LogManager.getLogger(SecurityIndexHandler.class);
 
+    public final static Map<String, Object> INDEX_SETTINGS = Map.of("index.number_of_shards", 1, "index.auto_expand_replicas", "0-all");
+
+    private final String indexName;
+
     private final Settings settings;
 
     private final Client client;
 
-    private final String indexName;
+    private final Path configDir;
 
-    public SecurityIndexHandler(final String indexName, final Settings settings, final Client client) {
-        this.indexName = indexName;
+    public SecurityIndexHandler(final Path configDir, final Settings settings, final Client client) {
+        this.indexName = SECURITY_CONFIGURATION_INDEX_NAME.get(settings);
+        this.configDir = configDir;
         this.settings = settings;
         this.client = client;
     }
-
-    public final static Map<String, Object> INDEX_SETTINGS = Map.of("index.number_of_shards", 1, "index.auto_expand_replicas", "0-all");
 
     public void createIndex(ActionListener<Boolean> listener) {
         try (final ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             client.admin()
                 .indices()
                 .create(
-                    new CreateIndexRequest(indexName).settings(INDEX_SETTINGS).waitForActiveShards(1),
+                    new CreateIndexRequest(indexName).settings(INDEX_SETTINGS).waitForActiveShards(ActiveShardCount.ALL),
                     ActionListener.runBefore(ActionListener.wrap(r -> {
                         if (r.isAcknowledged()) {
                             listener.onResponse(true);
@@ -88,7 +93,7 @@ public class SecurityIndexHandler {
     }
 
     @SuppressWarnings("removal")
-    public void uploadDefaultConfiguration(final Path configDir, final ActionListener<Set<SecurityConfig>> listener) {
+    public void uploadDefaultConfiguration(final ActionListener<Set<SecurityConfig>> listener) {
         try (final ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
                 try {
@@ -104,14 +109,13 @@ public class SecurityIndexHandler {
                         configuration.add(new SecurityConfig(cType, hash.toString(), null));
                         bulkRequest.add(
                             new IndexRequest(indexName).id(cType.toLCString())
-                                .opType(DocWriteRequest.OpType.INDEX)
+                                .opType(DocWriteRequest.OpType.CREATE)
                                 .source(cType.toLCString(), yamlContent)
                         );
                     }
                     client.bulk(bulkRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
                         if (r.hasFailures()) {
-                            listener.onFailure(new SecurityException(r.buildFailureMessage()));
-                            return;
+                            LOGGER.error("Failed to upload default security configuration. {}", r.buildFailureMessage());
                         }
                         listener.onResponse(configuration.build());
                     }, listener::onFailure), threadContext::restore));
