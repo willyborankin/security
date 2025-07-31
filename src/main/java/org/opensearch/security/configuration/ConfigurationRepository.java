@@ -40,6 +40,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import org.apache.kafka.common.metrics.Stat;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -74,29 +75,13 @@ import org.opensearch.security.support.SecurityIndexHandler;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX;
+import static org.opensearch.security.support.SecuritySettings.ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE;
 import static org.opensearch.security.support.SecuritySettings.SECURITY_CONFIGURATION_INDEX_NAME;
 import static org.opensearch.security.support.SnapshotRestoreHelper.isSecurityIndexRestoredFromSnapshot;
 
-public class ConfigurationRepository implements ClusterStateListener, IndexEventListener {
+public class ConfigurationRepository implements IndexManagement.IndexStateListener, IndexEventListener {
     private static final Logger LOGGER = LogManager.getLogger(ConfigurationRepository.class);
-
-    // public record IndexState(State state, boolean auditHotReloadEnabled) {
-    // public static final IndexState NOT_INITIALIZED = new IndexState(State.NOT_INITIALIZED, false);
-    //
-    // public static IndexState initialing() {
-    // return new IndexState(State.INITIALIZING, false);
-    // }
-    //
-    // public static IndexState initialized(boolean auditHotReloadEnabled) {
-    // return new IndexState(State.INITIALIZED, auditHotReloadEnabled);
-    // }
-    //
-    // public boolean isAuditHotReloadEnabled() {
-    // return auditHotReloadEnabled;
-    // }
-    // };
-
-    private final String securityIndex;
 
     private final Cache<CType<?>, SecurityDynamicConfiguration<?>> configCache;
 
@@ -118,9 +103,17 @@ public class ConfigurationRepository implements ClusterStateListener, IndexEvent
 
     private final boolean acceptInvalid;
 
+    private final Path configDir;
+
     private final SecurityIndexHandler securityIndexHandler;
 
-    private final Path configDir;
+    private volatile State initializationState;
+
+    private record State(boolean initialized, boolean auditHotReloadEnabled) {
+        public static final State NOT_INITIALIZED = new State(false, false);
+        public static final State INITIALIZING = new State(false, false);
+        public static final State INITIALIZED = new State(true, true);
+    }
 
     // visible for testing
     protected ConfigurationRepository(
@@ -134,7 +127,6 @@ public class ConfigurationRepository implements ClusterStateListener, IndexEvent
         final ConfigurationLoaderSecurity7 configurationLoaderSecurity7
     ) {
         this.configDir = configDir;
-        this.securityIndex = SECURITY_CONFIGURATION_INDEX_NAME.get(settings);
         this.settings = settings;
         this.threadPool = threadPool;
         this.clusterService = clusterService;
@@ -142,42 +134,46 @@ public class ConfigurationRepository implements ClusterStateListener, IndexEvent
         this.configurationChangedListener = new ArrayList<>();
         this.acceptInvalid = settings.getAsBoolean(ConfigConstants.SECURITY_UNSUPPORTED_ACCEPT_INVALID_CONFIG, false);
         this.cl = configurationLoaderSecurity7;
-        configCache = CacheBuilder.newBuilder().build();
+        this.configCache = CacheBuilder.newBuilder().build();
         this.securityIndexHandler = securityIndexHandler;
+        this.initializationState = State.NOT_INITIALIZED;
     }
 
     @Override
-    public void clusterChanged(final ClusterChangedEvent event) {
-        // init and upload sec index on the manager node only as soon as
-        // creation of index and upload config are done a new cluster state will be created.
-        // in case of failures it repeats attempt after restart
-        if (nodeSelectedAsManager(event)) {
-            securityIndexHandler.createIndex(ActionListener.wrap(r -> {}, e -> LOGGER.error("Couldn't create index {}", securityIndex, e)));
-        }
-        if (!event.previousState().metadata().hasIndex(securityIndex) && event.state().metadata().hasIndex(securityIndex)) {
-            LOGGER.info("Security index {} created, starting initialization", securityIndex);
+    public void onIndexStateChanged(IndexManagement.IndexState indexState) {
+        final SecurityMetadata securityMetadata = clusterService.state().custom(SecurityMetadata.TYPE);
+        if (!ALLOW_DEFAULT_INIT_SECURITY_INDEX.get(settings))
+            return;
+        if (ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE.get(settings)) {
+            if (ALLOW_DEFAULT_INIT_SECURITY_INDEX_USE_CLUSTER_STATE.get(settings)) {
+                if (securityMetadata == null && initializationState == State.NOT_INITIALIZED) {
+                    uploadDefaultConfigurationUsingClusterState();
+                } else if (securityMetadata != null && indexState.readyForWriting() && initializationState == State.NOT_INITIALIZED) {
+                    securityIndexHandler.loadConfiguration(securityMetadata.configuration(), ActionListener.wrap(cTypeConfigs -> {
+                        notifyConfigurationListeners(cTypeConfigs);
+                        final var auditConfigDocPresent = cTypeConfigs.containsKey(CType.AUDIT) && cTypeConfigs.get(CType.AUDIT).notEmpty();
+                        setupAuditConfigurationIfAny(auditConfigDocPresent);
+                        initializationState = State.INITIALIZED;
+                    }, e -> LOGGER.error("Couldn't reload security configuration", e)));
+                    initializationState = State.INITIALIZING;
+                }
+            }
+        } else {
             securityIndexHandler.uploadDefaultConfiguration(ActionListener.wrap(configuration -> {
                 threadPool.generic().submit(() -> {
                     securityIndexHandler.loadConfiguration(configuration, ActionListener.wrap(cTypeConfigs -> {
                         notifyConfigurationListeners(cTypeConfigs);
                         final var auditConfigDocPresent = cTypeConfigs.containsKey(CType.AUDIT) && cTypeConfigs.get(CType.AUDIT).notEmpty();
                         setupAuditConfigurationIfAny(auditConfigDocPresent);
-                        indexState = IndexState.initialized(auditConfigDocPresent);
+                        initializationState = State.INITIALIZED;
                     }, e -> LOGGER.error("Couldn't reload security configuration", e)));
                     return null;
                 });
             }, e -> {
-                LOGGER.error("Couldn't upload default configuration to index {}", securityIndex, e);
-                indexState = IndexState.NOT_INITIALIZED;
+                LOGGER.error("Couldn't upload default configuration to index {}", SECURITY_CONFIGURATION_INDEX_NAME.get(settings), e);
+                initializationState = State.NOT_INITIALIZED;
             }));
-            indexState = IndexState.initialing();
         }
-    }
-
-    private boolean nodeSelectedAsManager(final ClusterChangedEvent event) {
-        boolean wasClusterManager = event.previousState().nodes().isLocalNodeElectedClusterManager();
-        boolean isClusterManager = event.localNodeClusterManager();
-        return !wasClusterManager && isClusterManager;
     }
 
     private void setupAuditConfigurationIfAny(final boolean auditConfigDocPresent) {
@@ -201,7 +197,7 @@ public class ConfigurationRepository implements ClusterStateListener, IndexEvent
         }
     }
 
-    private void uploadDefaultConfiguration0() {
+    private void uploadDefaultConfigurationUsingClusterState() {
         securityIndexHandler.uploadDefaultConfiguration(
             ActionListener.wrap(
                 configuration -> clusterService.submitStateUpdateTask(
@@ -255,7 +251,7 @@ public class ConfigurationRepository implements ClusterStateListener, IndexEvent
     // }
 
     public boolean isAuditHotReloadingEnabled() {
-        return indexState.auditHotReloadEnabled;
+        return initializationState.auditHotReloadEnabled;
     }
 
     public static ConfigurationRepository create(
@@ -309,7 +305,7 @@ public class ConfigurationRepository implements ClusterStateListener, IndexEvent
 
     private boolean reloadConfiguration(final Collection<CType<?>> configTypes, final boolean fromBackgroundThread)
         throws ConfigUpdateAlreadyInProgressException {
-        if (!fromBackgroundThread && indexState.state() != State.INITIALIZED) {
+        if (!fromBackgroundThread && initializationState != State.INITIALIZED) {
             LOGGER.warn("Unable to reload configuration, initalization thread has not yet completed.");
             return false;
         }
@@ -382,7 +378,7 @@ public class ConfigurationRepository implements ClusterStateListener, IndexEvent
         try (StoredContext ctx = threadContext.stashContext()) {
             threadContext.putHeader(ConfigConstants.OPENDISTRO_SECURITY_CONF_REQUEST_HEADER, "true");
 
-            IndexMetadata securityMetadata = clusterService.state().metadata().index(this.securityIndex);
+            IndexMetadata securityMetadata = clusterService.state().metadata().index(SECURITY_CONFIGURATION_INDEX_NAME.get(settings));
             MappingMetadata mappingMetadata = securityMetadata == null ? null : securityMetadata.mapping();
 
             if (securityMetadata != null && mappingMetadata != null) {
@@ -413,7 +409,7 @@ public class ConfigurationRepository implements ClusterStateListener, IndexEvent
             CType<?> configurationType = configTypes.iterator().next();
             Map<String, String> fields = new HashMap<String, String>();
             fields.put(configurationType.toLCString(), Strings.toString(MediaTypeRegistry.JSON, result.get(configurationType)));
-            auditLog.logDocumentRead(this.securityIndex, configurationType.toLCString(), null, fields);
+            auditLog.logDocumentRead(SECURITY_CONFIGURATION_INDEX_NAME.get(settings), configurationType.toLCString(), null, fields);
         }
 
         return result;
@@ -438,11 +434,11 @@ public class ConfigurationRepository implements ClusterStateListener, IndexEvent
         final Index index = shardId.getIndex();
 
         // Check if this is a security index shard
-        if (securityIndex.equals(index.getName())) {
+        if (SECURITY_CONFIGURATION_INDEX_NAME.get(settings).equals(index.getName())) {
             // Only trigger on primary shard to avoid multiple reloads
             if (indexShard.routingEntry() != null && indexShard.routingEntry().primary()) {
                 threadPool.generic().execute(() -> {
-                    if (isSecurityIndexRestoredFromSnapshot(clusterService, index, securityIndex)) {
+                    if (isSecurityIndexRestoredFromSnapshot(clusterService, index, SECURITY_CONFIGURATION_INDEX_NAME.get(settings))) {
                         LOGGER.info("Security index primary shard {} started - config reloading for snapshot restore", shardId);
                         reloadConfiguration(CType.values());
                     }
@@ -450,4 +446,5 @@ public class ConfigurationRepository implements ClusterStateListener, IndexEvent
             }
         }
     }
+
 }

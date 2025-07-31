@@ -236,6 +236,7 @@ import static org.opensearch.security.privileges.dlsfls.FieldMasking.Config.BLAK
 import static org.opensearch.security.resources.ResourceSharingIndexHandler.getSharingIndex;
 import static org.opensearch.security.setting.DeprecatedSettings.checkForDeprecatedSetting;
 import static org.opensearch.security.support.ConfigConstants.OPENDISTRO_SECURITY_AUTHENTICATED_USER;
+import static org.opensearch.security.support.ConfigConstants.SECURITY_CONFIG_INDEX_NAME;
 import static org.opensearch.security.support.ConfigConstants.SECURITY_SSL_CERTIFICATES_HOT_RELOAD_ENABLED;
 import static org.opensearch.security.support.ConfigConstants.SECURITY_SSL_CERT_RELOAD_ENABLED;
 import static org.opensearch.security.support.ConfigConstants.SECURITY_UNSUPPORTED_RESTAPI_ALLOW_SECURITYCONFIG_MODIFICATION;
@@ -1129,8 +1130,6 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
 
         final var indexManagement = new IndexManagement(localClient);
 
-        indexManagement.addIndexStateListener(SECURITY_CONFIGURATION_INDEX_NAME.get(settings), indexState -> {});
-
         configurationRepository = ConfigurationRepository.create(
             settings,
             Optional.ofNullable(System.getProperty("security.default_init.dir"))
@@ -1297,7 +1296,8 @@ public final class OpenSearchSecurityPlugin extends OpenSearchSecuritySSLPlugin
         }
 
         if (!SSLConfig.isSslOnlyMode() && !isDisabled(settings)) {
-            clusterService.addListener(configurationRepository);
+            indexManagement.addIndexStateListener(SECURITY_CONFIGURATION_INDEX_NAME.get(settings), configurationRepository);
+            clusterService.addListener(indexManagement);
         }
         return components;
     }
