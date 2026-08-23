@@ -9,6 +9,7 @@ lz4_java            = "1.11.2"
 snappy_java         = "1.1.10.8"
 guava               = "33.6.0-jre"
 spring_framework    = "7.0.8"
+unboundid_ldap_sdk  = "7.0.5"
 
 [libraries]
 #OneLogin saml
@@ -54,6 +55,9 @@ google-guava = { group = "com.google.guava", name="guava", version.ref = "guava"
 #spring framework
 springframework-core = { group = "org.springframework", name = "spring-core", version.ref = "spring_framework" }
 springframework-beans = { group = "org.springframework", name = "spring-beans", version.ref = "spring_framework" }
+
+#LDAP
+unboundid-ldap-sdk = { group = "com.unboundid", name = "unboundid-ldapsdk", version.ref = "unboundid_ldap_sdk" }
 
 [bundles]
 onelogin-saml = ["onelogin-java-saml", "onelogin-java-saml-core"]
