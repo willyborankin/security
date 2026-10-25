@@ -21,6 +21,7 @@ package org.opensearch.security.ssl.transport;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
+import java.util.Objects;
 import javax.net.ssl.SSLPeerUnverifiedException;
 
 import org.apache.logging.log4j.LogManager;
@@ -62,15 +63,11 @@ public class SecuritySSLRequestHandler<T extends TransportRequest> implements Tr
 
         super();
         this.action = action;
-        this.actualHandler = actualHandler;
+        this.actualHandler = Objects.requireNonNull(actualHandler);
         this.threadPool = threadPool;
         this.principalExtractor = principalExtractor;
         this.sslConfig = sslConfig;
         this.errorHandler = errorHandler;
-    }
-
-    protected ThreadPool getThreadPool() {
-        return threadPool;
     }
 
     protected ThreadContext getThreadContext() {
@@ -134,9 +131,9 @@ public class SecuritySSLRequestHandler<T extends TransportRequest> implements Tr
                 addAdditionalContextValues(action, request, x509LocalCerts, x509PeerCerts, principal);
                 if (threadContext != null) {
                     // in the case of ssl plugin only: threadContext and principalExtractor are null
-                    threadContext.putTransient("_opendistro_security_ssl_transport_principal", principal);
-                    threadContext.putTransient("_opendistro_security_ssl_transport_peer_certificates", x509PeerCerts);
-                    threadContext.putTransient("_opendistro_security_ssl_transport_local_certificates", x509LocalCerts);
+                    threadContext.putTransient(ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_PRINCIPAL, principal);
+                    threadContext.putTransient(ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_PEER_CERTIFICATES, x509PeerCerts);
+                    threadContext.putTransient(ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_LOCAL_CERTIFICATES, x509LocalCerts);
                     threadContext.putTransient(
                         "_opendistro_security_ssl_transport_protocol",
                         sslhandler.engine().getSession().getProtocol()

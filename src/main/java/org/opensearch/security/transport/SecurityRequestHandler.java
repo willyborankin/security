@@ -29,10 +29,13 @@ package org.opensearch.security.transport;
 import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.google.common.base.Strings;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchSecurityException;
@@ -49,10 +52,6 @@ import org.opensearch.security.auditlog.AuditLog;
 import org.opensearch.security.auditlog.AuditLog.Origin;
 import org.opensearch.security.privileges.DocumentAllowList;
 import org.opensearch.security.privileges.dlsfls.DlsRequestHeadersUtil;
-import org.opensearch.security.ssl.SslExceptionHandler;
-import org.opensearch.security.ssl.transport.PrincipalExtractor;
-import org.opensearch.security.ssl.transport.SSLConfig;
-import org.opensearch.security.ssl.transport.SecuritySSLRequestHandler;
 import org.opensearch.security.ssl.util.ExceptionUtils;
 import org.opensearch.security.support.ConfigConstants;
 import org.opensearch.security.support.HeaderHelper;
@@ -68,10 +67,15 @@ import tools.jackson.core.type.TypeReference;
 
 import static org.opensearch.security.OpenSearchSecurityPlugin.isActionTraceEnabled;
 
-public class SecurityRequestHandler<T extends TransportRequest> extends SecuritySSLRequestHandler<T> {
+public class SecurityRequestHandler<T extends TransportRequest> implements TransportRequestHandler<T> {
 
+    private static final Logger log = LogManager.getLogger(SecurityRequestHandler.class);
     private static final String DIRECT_CHANNEL_TYPE = "direct";
     private static final String STREAM_CHANNEL_TYPE = "stream-transport";
+
+    private final String action;
+    private final TransportRequestHandler<T> actualHandler;
+    private final ThreadPool threadPool;
     private final AuditLog auditLog;
     private final InterClusterRequestEvaluator requestEvalProvider;
     private final ClusterService cs;
@@ -83,15 +87,14 @@ public class SecurityRequestHandler<T extends TransportRequest> extends Security
         final TransportRequestHandler<T> actualHandler,
         final ThreadPool threadPool,
         final AuditLog auditLog,
-        final PrincipalExtractor principalExtractor,
         final InterClusterRequestEvaluator requestEvalProvider,
         final ClusterService cs,
-        final SSLConfig sslConfig,
-        final SslExceptionHandler sslExceptionHandler,
         final UserFactory userFactory,
         final RemoteClusterIdentityPolicy remoteClusterIdentityPolicy
     ) {
-        super(action, actualHandler, threadPool, principalExtractor, sslConfig, sslExceptionHandler);
+        this.action = action;
+        this.actualHandler = Objects.requireNonNull(actualHandler);
+        this.threadPool = threadPool;
         this.auditLog = auditLog;
         this.requestEvalProvider = requestEvalProvider;
         this.cs = cs;
@@ -99,18 +102,23 @@ public class SecurityRequestHandler<T extends TransportRequest> extends Security
         this.remoteClusterIdentityPolicy = remoteClusterIdentityPolicy;
     }
 
+    protected ThreadContext getThreadContext() {
+        if (threadPool == null) {
+            return null;
+        }
+
+        return threadPool.getThreadContext();
+    }
+
     @Override
-    protected void messageReceivedDecorate(
-        final T request,
-        final TransportRequestHandler<T> handler,
-        final TransportChannel transportChannel,
-        Task task
-    ) throws Exception {
+    public void messageReceived(final T request, final TransportChannel transportChannel, Task task) throws Exception {
         final String resolvedActionClass = resolveActionClass(request);
 
         String initialActionClassValue = getThreadContext().getHeader(ConfigConstants.OPENDISTRO_SECURITY_INITIAL_ACTION_CLASS_HEADER);
 
         final ThreadContext.StoredContext sgContext = getThreadContext().newStoredContext(false);
+
+        evaluateNodeAndExtensionContext(request);
 
         TransportIdentityContext.restoreOrigin(getThreadContext());
 
@@ -162,7 +170,7 @@ public class SecurityRequestHandler<T extends TransportRequest> extends Security
             }
 
             if (isDirectOrStreamChannel(channelType)) {
-                super.messageReceivedDecorate(request, handler, transportChannel, task);
+                actualHandler.messageReceived(request, transportChannel, task);
                 return;
             }
 
@@ -173,7 +181,7 @@ public class SecurityRequestHandler<T extends TransportRequest> extends Security
             if (skipSecurityIfDualMode) {
                 populateDualModeContext(request);
 
-                super.messageReceivedDecorate(request, handler, transportChannel, task);
+                actualHandler.messageReceived(request, transportChannel, task);
                 return;
             }
 
@@ -238,13 +246,60 @@ public class SecurityRequestHandler<T extends TransportRequest> extends Security
 
                 putInitialActionClassHeader(initialActionClassValue, resolvedActionClass);
             }
-            super.messageReceivedDecorate(request, handler, transportChannel, task);
+            actualHandler.messageReceived(request, transportChannel, task);
         } finally {
 
             addActionTrace("FIN", transportChannel.getChannelType(), false);
 
             if (sgContext != null) {
                 sgContext.close();
+            }
+        }
+    }
+
+    private void evaluateNodeAndExtensionContext(TransportRequest request) throws Exception {
+        if (getThreadContext() == null) {
+            return;
+        }
+
+        final X509Certificate[] localCerts = getThreadContext().getTransient(
+            ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_LOCAL_CERTIFICATES
+        );
+        final X509Certificate[] peerCerts = getThreadContext().getTransient(
+            ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_PEER_CERTIFICATES
+        );
+        final String principal = getThreadContext().getTransient(ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_PRINCIPAL);
+
+        if (peerCerts != null && localCerts != null) {
+            boolean isNodeCertificateRequest = requestEvalProvider.isInterClusterRequest(request, localCerts, peerCerts, principal);
+            final boolean isTraceEnabled = log.isTraceEnabled();
+            if (isNodeCertificateRequest) {
+                if (cs.getClusterName().value().equals(getThreadContext().getHeader("_opendistro_security_remotecn"))) {
+
+                    if (isTraceEnabled && !action.startsWith("internal:")) {
+                        log.trace("Is local cluster node request ({}/{}/{})", action, request.getClass(), request.remoteAddress());
+                    }
+
+                    getThreadContext().putTransient(ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_INTERCLUSTER_REQUEST, Boolean.TRUE);
+                } else {
+                    getThreadContext().putTransient(
+                        ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_TRUSTED_CLUSTER_REQUEST,
+                        Boolean.TRUE
+                    );
+                }
+
+            } else {
+                if (isTraceEnabled) {
+                    log.trace("Is not a node certificate request");
+                }
+            }
+        }
+
+        String extensionUniqueId = getThreadContext().getHeader("extension_unique_id");
+        if (extensionUniqueId != null) {
+            ExtensionsManager extManager = OpenSearchSecurityPlugin.GuiceHolder.getExtensionsManager();
+            if (extManager.lookupExtensionSettingsById(extensionUniqueId).isPresent()) {
+                getThreadContext().putTransient(ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_EXTENSION_REQUEST, Boolean.TRUE);
             }
         }
     }
@@ -311,46 +366,5 @@ public class SecurityRequestHandler<T extends TransportRequest> extends Security
             TransportHeaderConstants.ACTION_TRACE_HEADER_PREFIX + System.currentTimeMillis() + "#" + UUID.randomUUID(),
             Thread.currentThread().getName() + " " + stage + " -> " + channelType + " " + headers
         );
-
-    }
-
-    @Override
-    protected void addAdditionalContextValues(
-        final String action,
-        final TransportRequest request,
-        final X509Certificate[] localCerts,
-        final X509Certificate[] peerCerts,
-        final String principal
-    ) throws Exception {
-
-        boolean isNodeCertificateRequest = requestEvalProvider.isInterClusterRequest(request, localCerts, peerCerts, principal);
-        final boolean isTraceEnabled = log.isTraceEnabled();
-        if (isNodeCertificateRequest) {
-            if (cs.getClusterName().value().equals(getThreadContext().getHeader("_opendistro_security_remotecn"))) {
-
-                if (isTraceEnabled && !action.startsWith("internal:")) {
-                    log.trace("Is local cluster node request ({}/{}/{})", action, request.getClass(), request.remoteAddress());
-                }
-
-                getThreadContext().putTransient(ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_INTERCLUSTER_REQUEST, Boolean.TRUE);
-            } else {
-                getThreadContext().putTransient(ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_TRUSTED_CLUSTER_REQUEST, Boolean.TRUE);
-            }
-
-        } else {
-            if (isTraceEnabled) {
-                log.trace("Is not a node certificate request");
-            }
-        }
-
-        String extensionUniqueId = getThreadContext().getHeader("extension_unique_id");
-        if (extensionUniqueId != null) {
-            ExtensionsManager extManager = OpenSearchSecurityPlugin.GuiceHolder.getExtensionsManager();
-            if (extManager.lookupExtensionSettingsById(extensionUniqueId).isPresent()) {
-                getThreadContext().putTransient(ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_EXTENSION_REQUEST, Boolean.TRUE);
-            }
-        }
-
-        super.addAdditionalContextValues(action, request, localCerts, peerCerts, principal);
     }
 }

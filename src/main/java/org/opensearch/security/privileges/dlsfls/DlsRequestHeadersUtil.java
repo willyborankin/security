@@ -105,7 +105,7 @@ public class DlsRequestHeadersUtil {
         threadContext.putTransient(OPENSEARCH_SECURITY_DLS_REQUEST_HEADERS, dlsRequestHeaders);
 
         // and as a header so that it is passed on to other threads / instances, where it will be restored into a transient entry
-        // See SecurityRequestHandler#messageReceivedDecorate
+        // See SecurityRequestHandler#messageReceived
         if (!dlsRequestHeaders.isEmpty()) {
             final var serializedDlsRequestHeaders = DefaultObjectMapper.objectMapper()
                 .writerFor(new TypeReference<List<DlsRequestHeader>>() {

@@ -61,6 +61,7 @@ import org.opensearch.security.privileges.dlsfls.DlsFlsLegacyHeaders;
 import org.opensearch.security.ssl.SslExceptionHandler;
 import org.opensearch.security.ssl.transport.PrincipalExtractor;
 import org.opensearch.security.ssl.transport.SSLConfig;
+import org.opensearch.security.ssl.transport.SecuritySSLRequestHandler;
 import org.opensearch.security.support.ConfigConstants;
 import org.opensearch.security.user.UserFactory;
 import org.opensearch.tasks.Task;
@@ -117,19 +118,23 @@ public class SecurityInterceptor {
         this.remoteClusterIdentityPolicy = remoteClusterIdentityPolicy;
     }
 
-    public <T extends TransportRequest> SecurityRequestHandler<T> getHandler(String action, TransportRequestHandler<T> actualHandler) {
-        return new SecurityRequestHandler<>(
+    public <T extends TransportRequest> TransportRequestHandler<T> getHandler(String action, TransportRequestHandler<T> actualHandler) {
+        return new SecuritySSLRequestHandler<>(
             action,
-            actualHandler,
+            new SecurityRequestHandler<>(
+                action,
+                actualHandler,
+                threadPool,
+                auditLog,
+                requestEvalProvider,
+                cs,
+                userFactory,
+                remoteClusterIdentityPolicy
+            ),
             threadPool,
-            auditLog,
             principalExtractor,
-            requestEvalProvider,
-            cs,
             sslConfig,
-            sslExceptionHandler,
-            userFactory,
-            remoteClusterIdentityPolicy
+            sslExceptionHandler
         );
     }
 

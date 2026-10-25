@@ -124,6 +124,10 @@ public class ConfigConstants {
      * Set by the SSL plugin, this is the peer node certificate on the transport layer
      */
     public static final String OPENDISTRO_SECURITY_SSL_TRANSPORT_PRINCIPAL = OPENDISTRO_SECURITY_CONFIG_PREFIX + "ssl_transport_principal";
+    public static final String OPENDISTRO_SECURITY_SSL_TRANSPORT_PEER_CERTIFICATES = OPENDISTRO_SECURITY_CONFIG_PREFIX
+        + "ssl_transport_peer_certificates";
+    public static final String OPENDISTRO_SECURITY_SSL_TRANSPORT_LOCAL_CERTIFICATES = OPENDISTRO_SECURITY_CONFIG_PREFIX
+        + "ssl_transport_local_certificates";
 
     public static final String OPENDISTRO_SECURITY_USER = OPENDISTRO_SECURITY_CONFIG_PREFIX + "user";
     public static final String OPENDISTRO_SECURITY_USER_HEADER = OPENDISTRO_SECURITY_CONFIG_PREFIX + "user_header";
