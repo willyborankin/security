@@ -78,7 +78,7 @@ import org.opensearch.security.ssl.rest.SecuritySSLInfoAction;
 import org.opensearch.security.ssl.transport.DefaultPrincipalExtractor;
 import org.opensearch.security.ssl.transport.PrincipalExtractor;
 import org.opensearch.security.ssl.transport.SSLConfig;
-import org.opensearch.security.ssl.transport.SecuritySSLTransportInterceptor;
+import org.opensearch.security.ssl.transport.SecuritySSLRequestHandler;
 import org.opensearch.security.ssl.util.SSLConfigConstants;
 import org.opensearch.security.support.SecuritySettings;
 import org.opensearch.telemetry.tracing.Tracer;
@@ -86,6 +86,8 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.SharedGroupFactory;
 import org.opensearch.transport.Transport;
 import org.opensearch.transport.TransportInterceptor;
+import org.opensearch.transport.TransportRequest;
+import org.opensearch.transport.TransportRequestHandler;
 import org.opensearch.transport.client.Client;
 import org.opensearch.transport.netty4.ssl.SecureNetty4Transport;
 import org.opensearch.watcher.ResourceWatcherService;
@@ -284,13 +286,20 @@ public class OpenSearchSecuritySSLPlugin extends Plugin implements SystemIndexPl
 
     @Override
     public List<TransportInterceptor> getTransportInterceptors(NamedWriteableRegistry namedWriteableRegistry, ThreadContext threadContext) {
-        List<TransportInterceptor> interceptors = new ArrayList<TransportInterceptor>(1);
-
         if (sslConfig.transportEnabled() && !client) {
-            interceptors.add(new SecuritySSLTransportInterceptor(settings, null, null, sslConfig, NOOP_SSL_EXCEPTION_HANDLER));
+            return List.of(new TransportInterceptor() {
+                @Override
+                public <T extends TransportRequest> TransportRequestHandler<T> interceptHandler(
+                    String action,
+                    String executor,
+                    boolean forceExecution,
+                    TransportRequestHandler<T> actualHandler
+                ) {
+                    return new SecuritySSLRequestHandler<T>(action, actualHandler, null, null, sslConfig, NOOP_SSL_EXCEPTION_HANDLER);
+                }
+            });
         }
-
-        return interceptors;
+        return List.of();
     }
 
     @Override
