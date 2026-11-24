@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -65,6 +66,7 @@ public abstract class AbstractHTTPJwtAuthenticator implements HTTPAuthenticator 
     private final List<String> rolesKey;
     private final List<String> requiredAudience;
     private final String requiredIssuer;
+    private final Set<String> forbiddenSubjects;
 
     public static final int DEFAULT_CLOCK_SKEW_TOLERANCE_SECONDS = 30;
     private final int clockSkewToleranceSeconds;
@@ -94,6 +96,7 @@ public abstract class AbstractHTTPJwtAuthenticator implements HTTPAuthenticator 
             log.error("Error creating JWT authenticator. JWT authentication will not work", e);
             throw new RuntimeException(e);
         }
+        this.forbiddenSubjects = Set.copyOf(settings.getAsList("forbidden_subjects", List.of()));
     }
 
     @Override
@@ -137,6 +140,10 @@ public abstract class AbstractHTTPJwtAuthenticator implements HTTPAuthenticator 
         if (User.hasReservedPrefix(subject)) {
             log.warn("JWT subject uses a reserved security prefix");
             return AuthCredentials.rejected(subject, AuthenticationFailureReason.RESERVED_SUBJECT_PREFIX);
+        }
+        if (forbiddenSubjects.contains(subject)) {
+            log.warn("JWT subject is forbidden");
+            return AuthCredentials.rejected(subject, AuthenticationFailureReason.FORBIDDEN_SUBJECT);
         }
 
         final String[] roles = extractRoles(claimsSet);
